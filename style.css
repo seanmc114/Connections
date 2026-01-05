@@ -1,6 +1,4 @@
-/* ------------------------------------------------------------
-   Synge Street CBS – Connections (Final visual version)
-------------------------------------------------------------- */
+/* Synge Street CBS – Connections (final header-crest version) */
 
 body {
   margin: 0;
@@ -15,24 +13,6 @@ body {
   overflow-x: hidden;
 }
 
-/* full-page crest background */
-.page-crest {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 320px;
-  opacity: 0.25;
-  z-index: 0;
-  pointer-events: none;
-  animation: crestPulse 10s ease-in-out infinite alternate;
-}
-
-@keyframes crestPulse {
-  from { opacity: 0.18; transform: translate(-50%, -50%) scale(1); }
-  to   { opacity: 0.3;  transform: translate(-50%, -50%) scale(1.05); }
-}
-
 /* translucent glass container */
 .container {
   position: relative;
@@ -40,12 +20,29 @@ body {
   padding: 30px 20px;
   width: 100%;
   max-width: 820px;
-  background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(4px);
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(3px);
   border-radius: 22px;
   box-shadow: 0 6px 28px rgba(0,0,0,0.15);
   margin-top: 40px;
   z-index: 2;
+}
+
+/* crest positioned in header */
+.crest-bg {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 280px;
+  opacity: 0.25;
+  pointer-events: none;
+  z-index: 0;
+  animation: crestPulse 10s ease-in-out infinite alternate;
+}
+@keyframes crestPulse {
+  from { opacity: 0.2; transform: translate(-50%, -50%) scale(1); }
+  to   { opacity: 0.3; transform: translate(-50%, -50%) scale(1.05); }
 }
 
 /* titles */
@@ -56,12 +53,16 @@ body {
   color: #23356a;
   text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
   margin-bottom: 0;
+  position: relative;
+  z-index: 2;
 }
 .subtitle {
   font-size: 1.3rem;
   font-weight: 600;
   color: #f2b705;
   margin-top: 6px;
+  position: relative;
+  z-index: 2;
 }
 
 /* levels */
@@ -199,4 +200,3 @@ footer {
   text-align: center;
   padding-bottom: 20px;
 }
-
