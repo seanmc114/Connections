@@ -6,8 +6,8 @@
 body {
   margin: 0;
   font-family: 'Open Sans', sans-serif;
-  background: linear-gradient(180deg, #FFEDE4 0%, #FFF8F0 100%);
-  color: #333;
+  background: linear-gradient(180deg, #FAFAFA 0%, #E6EEFF 100%);
+  color: #222;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -15,6 +15,7 @@ body {
   justify-content: flex-start;
   overflow-x: hidden;
 }
+
 
 .container {
   position: relative;
