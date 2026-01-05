@@ -23,12 +23,14 @@ body {
   padding: 30px 20px;
   width: 100%;
   max-width: 800px;
-  background-color: rgba(255, 255, 255, 0.88);
+  background-color: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(6px);
   border-radius: 20px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
   margin-top: 40px;
   z-index: 2;
 }
+
 
 header {
   position: relative;
@@ -37,14 +39,20 @@ header {
 
 .crest-bg {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  opacity: 0.08;
-  width: 160px;
+  transform: translate(-50%, -50%);
+  opacity: 0.18;
+  width: 280px;
   height: auto;
   pointer-events: none;
   z-index: 0;
+  animation: crestPulse 10s ease-in-out infinite alternate;
+}
+
+@keyframes crestPulse {
+  from { opacity: 0.12; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0.2; transform: translate(-50%, -50%) scale(1.05); }
 }
 
 .title {
