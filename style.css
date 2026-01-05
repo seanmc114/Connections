@@ -1,5 +1,3 @@
-/* Connections – Synge Street CBS edition */
-
 body {
   margin: 0;
   font-family: 'Open Sans', sans-serif;
@@ -13,6 +11,7 @@ body {
   overflow-x: hidden;
 }
 
+/* semi-transparent panel so crest shows */
 .container {
   position: relative;
   text-align: center;
@@ -27,6 +26,7 @@ body {
   z-index: 2;
 }
 
+/* crest clearly visible */
 .crest-bg {
   position: absolute;
   top: 50%;
@@ -41,10 +41,9 @@ body {
 }
 @keyframes crestPulse {
   from { opacity: 0.12; transform: translate(-50%, -50%) scale(1); }
-  to   { opacity: 0.2;  transform: translate(-50%, -50%) scale(1.05); }
+  to   { opacity: 0.22; transform: translate(-50%, -50%) scale(1.05); }
 }
 
-/* Titles */
 .title {
   font-family: 'Montserrat', sans-serif;
   font-weight: 700;
@@ -60,7 +59,7 @@ body {
   margin-top: 6px;
 }
 
-/* Level buttons */
+/* levels */
 #level-list {
   display: flex;
   flex-direction: column;
@@ -110,7 +109,7 @@ body {
   margin-top: 4px;
 }
 
-/* Game area */
+/* gameplay */
 #game { margin-top: 30px; }
 #hud {
   display: flex;
@@ -122,12 +121,7 @@ body {
   font-weight: 600;
 }
 #questions .q { margin: 14px 0; text-align: left; }
-.prompt {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 6px;
-}
+.prompt { font-size: 1.1rem; font-weight: 600; color: #333; margin-bottom: 6px; }
 #questions input {
   font-size: 1.05rem;
   padding: 10px 12px;
@@ -137,52 +131,8 @@ body {
   outline: none;
   transition: border-color 0.25s ease, background-color 0.25s ease;
 }
-
-/* Feedback visuals */
-#questions input.good {
-  border-color: #2ECC71;
-  background-color: rgba(46,204,113,0.1);
-  animation: correctPulse 0.8s ease;
-}
-#questions input.bad {
-  border-color: #E74C3C;
-  background-color: rgba(231,76,60,0.1);
-  animation: shake 0.4s ease;
-}
-@keyframes correctPulse {
-  0% { box-shadow: 0 0 0 0 rgba(46,204,113,0.6); }
-  70%{ box-shadow: 0 0 10px 6px rgba(46,204,113,0); }
-  100%{ box-shadow: none; }
-}
-@keyframes shake {
-  0%,100%{ transform:translateX(0); }
-  25%{ transform:translateX(-5px); }
-  50%{ transform:translateX(5px); }
-  75%{ transform:translateX(-5px); }
-}
-
-/* Buttons below questions */
-button#submit, button#back-button {
-  background-color: #2F3C7E;
-  color: white;
-  font-weight: 600;
-  border: none;
-  padding: 12px 18px;
-  border-radius: 10px;
-  cursor: pointer;
-  font-size: 1.05rem;
-  margin: 8px 6px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 10px rgba(47,60,126,0.25);
-}
-button#submit:hover, button#back-button:hover {
-  background-color: #F9A602;
-  color: #2F3C7E;
-  transform: scale(1.06);
-  box-shadow: 0 6px 14px rgba(249,166,2,0.4);
-}
-
-/* Feedback text block */
+#questions input.good { border-color:#2ECC71; background-color:rgba(46,204,113,0.1);}
+#questions input.bad  { border-color:#E74C3C; background-color:rgba(231,76,60,0.1);}
 .feedback {
   margin-top: 6px;
   font-size: 0.95rem;
@@ -191,18 +141,36 @@ button#submit:hover, button#back-button:hover {
   padding-left: 8px;
   animation: fadeIn 0.4s ease;
 }
-.feedback .right { color: #2ECC71; font-weight: 600; }
-.feedback .wrong { color: #E74C3C; font-weight: 600; }
-.feedback em { color: #2F3C7E; }
-@keyframes fadeIn {
-  from { opacity:0; transform:translateY(-4px);}
-  to   { opacity:1; transform:translateY(0);}
+.feedback .right { color:#2ECC71; font-weight:600;}
+.feedback .wrong { color:#E74C3C; font-weight:600;}
+.feedback em { color:#2F3C7E;}
+@keyframes fadeIn { from{opacity:0;transform:translateY(-4px);} to{opacity:1;transform:translateY(0);} }
+
+/* buttons */
+button#submit, button#back-button {
+  background-color:#2F3C7E;
+  color:white;
+  font-weight:600;
+  border:none;
+  padding:12px 18px;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:1.05rem;
+  margin:8px 6px;
+  transition:all 0.3s ease;
+  box-shadow:0 4px 10px rgba(47,60,126,0.25);
+}
+button#submit:hover, button#back-button:hover {
+  background-color:#F9A602;
+  color:#2F3C7E;
+  transform:scale(1.06);
+  box-shadow:0 6px 14px rgba(249,166,2,0.4);
 }
 
-/* Confetti */
+/* confetti */
 @keyframes confettiFall {
-  0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
-  100%{ transform: translateY(400px) rotate(720deg); opacity: 0; }
+  0% { transform: translateY(-10px) rotate(0deg); opacity:1; }
+  100%{ transform: translateY(400px) rotate(720deg); opacity:0;}
 }
 .confetti {
   position: fixed;
@@ -215,10 +183,4 @@ button#submit:hover, button#back-button:hover {
   z-index: 1000;
 }
 
-footer {
-  margin-top: 24px;
-  font-size: 0.85rem;
-  color: #555;
-  text-align: center;
-  padding-bottom: 20px;
-}
+footer {margin-top:24px;font-size:0.85rem;color:#555;text-align:center;padding-bottom:20px;}
