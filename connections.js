@@ -189,9 +189,29 @@
     let correct=0,wrong=0;
     $$("#questions input").forEach((inp,i)=>{
       const q=quiz[i];
-      if(compare(q.user,q.es)){inp.classList.add("good");correct++;}
-      else{inp.classList.add("bad");wrong++;}
-      inp.disabled=true;
+    if (compare(q.user, q.es)) {
+  inp.classList.add("good");
+  correct++;
+
+  // NEW: show learning feedback
+  const fb = document.createElement("div");
+  fb.className = "feedback";
+  fb.innerHTML = `<span class="right">✅ Correct!</span>`;
+  inp.parentElement.appendChild(fb);
+
+} else {
+  inp.classList.add("bad");
+  wrong++;
+
+  // NEW: show correct version
+  const fb = document.createElement("div");
+  fb.className = "feedback";
+  fb.innerHTML = `<span class="wrong">❌ Incorrect.</span> <br><em>Correct answer:</em> <strong>${quiz[i].es}</strong>`;
+  inp.parentElement.appendChild(fb);
+}
+
+inp.disabled = true;
+ 
     });
     const score=time+(wrong*PENALTY);
     const results=$("#results");
