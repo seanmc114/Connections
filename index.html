@@ -1,30 +1,116 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Connections – Synge Street CBS</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Synge Connectors</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
-
 <body>
-  <h1>Connections 🎯</h1>
-  <h3>Synge Street CBS – Learn Spanish Conjunctions</h3>
+  <div class="bg-crest" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
 
-  <div id="main-menu">
-    <h2>Select a Level</h2>
-    <div id="level-list"></div>
-  </div>
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">⚡</div>
+        <div class="brand-text">
+          <h1>Synge Connectors</h1>
+          <p>Conjunctions · Connections · Linking words</p>
+        </div>
+      </div>
 
-  <div id="game" style="display:none">
-    <h2 id="level-label"></h2>
-    <div id="timer"></div>
-    <div id="questions"></div>
-    <button id="submit">Submit</button>
-    <button id="back-button">Back</button>
-    <div id="results"></div>
-  </div>
+      <div class="hud" id="hud">
+        <div class="hud-pill">
+          <span class="hud-label">Level</span>
+          <span class="hud-value" id="hudLevel">—</span>
+        </div>
+        <div class="hud-pill">
+          <span class="hud-label">Time</span>
+          <span class="hud-value" id="hudTime">00:00</span>
+        </div>
+        <div class="hud-pill">
+          <span class="hud-label">Penalty</span>
+          <span class="hud-value" id="hudPenalty">+0s</span>
+        </div>
+      </div>
+    </header>
 
-  <script src="connections.js"></script>
+    <!-- MENU -->
+    <section class="card" id="menu">
+      <div class="card-head">
+        <h2>Choose a level</h2>
+        <p>10 questions · +30 seconds per wrong/blank · accents required (Ñ can be typed as N)</p>
+      </div>
+
+      <div class="levels" id="levels"></div>
+
+      <div class="menu-actions">
+        <button class="btn ghost" id="howBtn" type="button">How it works</button>
+        <button class="btn primary" id="startBtn" type="button" disabled>Start Level</button>
+      </div>
+
+      <div class="how" id="howPanel" hidden>
+        <ul>
+          <li>You’ll get <strong>10 prompts</strong> (English) and type the <strong>Spanish connector</strong>.</li>
+          <li>Score = your time + <strong>30s</strong> for each wrong/blank.</li>
+          <li>At the end you’ll see full feedback and your best time for that level will save automatically.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- GAME -->
+    <section class="card" id="game" hidden>
+      <div class="card-head">
+        <h2 id="gameTitle">Level —</h2>
+        <p id="gameSubtitle">Translate the connector into Spanish.</p>
+      </div>
+
+      <form id="quizForm" class="quiz"></form>
+
+      <div class="game-actions">
+        <button class="btn ghost" id="backToMenuBtn" type="button">Back to Menu</button>
+        <button class="btn primary" id="submitBtn" type="button">Submit</button>
+      </div>
+    </section>
+
+    <!-- RESULTS -->
+    <section class="card" id="results" hidden>
+      <div class="card-head">
+        <h2>Results</h2>
+        <p id="resultsSummary">—</p>
+      </div>
+
+      <div class="results-grid">
+        <div class="metric">
+          <div class="metric-label">Raw time</div>
+          <div class="metric-value" id="rawTime">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Penalties</div>
+          <div class="metric-value" id="penalties">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Final score</div>
+          <div class="metric-value" id="finalScore">—</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Best (this level)</div>
+          <div class="metric-value" id="bestScore">—</div>
+        </div>
+      </div>
+
+      <div class="feedback" id="feedback"></div>
+
+      <div class="results-actions">
+        <button class="btn ghost" id="tryAgainBtn" type="button">Try Again</button>
+        <button class="btn ghost" id="menuBtn" type="button">Back to Menu</button>
+        <button class="btn primary" id="nextLevelBtn" type="button">Next Level</button>
+      </div>
+    </section>
+  </main>
+
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <script src="script.js"></script>
 </body>
 </html>
