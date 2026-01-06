@@ -1,13 +1,13 @@
 // TURBO · LC Spanish · Connectors (EN → ES)
-// Modes: Classic, Sudden Death, Sprint (60s cap), Team Relay
-// Competitive fairness (2 devices): use the SAME Match Code → same 10 prompts.
-// Each attempt produces a Result Code. Use the Compare panel to declare winner.
+// Modes: Classic, Sudden Death, Speed Challenge (60s), Team Relay
+// Fair play across devices: SAME Match Code => same 10 prompts.
+// Each attempt produces a Result Code; Compare declares winner.
 //
-// Preserves your working Turbo mechanics:
+// Turbo mechanics preserved:
 // - 10 questions
 // - +30s per wrong/blank
 // - unlock thresholds 200→40
-// - best saved
+// - best saved per (mode, level)
 // - global ES reads tokens cap 7 (commit-on-finish), +1 token on perfect
 // - confetti/banner on perfect
 
@@ -15,26 +15,24 @@
   const $  = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-  // ===================== CONFIG =====================
   const QUESTIONS_PER_ROUND = 10;
   const PENALTY_PER_WRONG   = 30;
-  const SPRINT_CAP_SECONDS  = 60;
+  const SPEED_CAP_SECONDS   = 60;
 
   const BASE_THRESH = { 1:200, 2:180, 3:160, 4:140, 5:120, 6:100, 7:80, 8:60, 9:40 };
 
   const GLOBAL_READS_MAX = 7;
-  const GLOBAL_READS_KEY = "turboConnectors:globalReads:v2";
+  const GLOBAL_READS_KEY = "turboConnectors:globalReads:vFINAL";
 
-  const STORAGE_PREFIX = "turboConnectors:v2";
+  const STORAGE_PREFIX = "turboConnectors:vFINAL";
   const bestKey = (mode, lvl) => `${STORAGE_PREFIX}:best:${mode}:${lvl}`;
 
-  // "Signature" salt for Result Codes (not truly secure, but prevents casual tampering)
-  const RESULT_SALT = "TURBO_CONNECTORS_V2_SALT_2026";
+  const RESULT_SALT = "TURBO_CONNECTORS_FINAL_SALT_2026";
 
   const MODE_LABELS = {
     classic: "Classic",
     suddendeath: "Sudden Death",
-    sprint: "Sprint (60s cap)",
+    speed: "Speed Challenge (60s)",
     team: "Team Relay"
   };
 
@@ -213,7 +211,7 @@
   };
 
   // ===================== Normalisation =====================
-  // Accents REQUIRED (we don't strip accents); capitals ignored; ñ counts as n.
+  // Accents REQUIRED; capitals ignored; ñ counts as n.
   function norm(s){
     let t = (s || "").trim().toLowerCase();
     t = t.replace(/ñ/g, "n");
@@ -276,8 +274,7 @@
     return prev != null && (need == null || prev <= need);
   }
 
-  // ===================== Seeded selection (same 10 prompts) =====================
-  // xmur3 hash -> 32-bit
+  // ===================== Seeded same-10 selection =====================
   function xmur3(str){
     let h = 1779033703 ^ str.length;
     for (let i=0; i<str.length; i++){
@@ -291,7 +288,6 @@
       return h >>> 0;
     };
   }
-  // mulberry32 PRNG
   function mulberry32(a){
     return function(){
       let t = a += 0x6D2B79F5;
@@ -327,7 +323,6 @@
     return decodeURIComponent(escape(atob(s)));
   }
   function simpleHash(str){
-    // quick checksum (not crypto)
     let h = 2166136261;
     for (let i=0;i<str.length;i++){
       h ^= str.charCodeAt(i);
@@ -350,7 +345,7 @@
       if (sig !== expected) return { ok:false, error:"Signature mismatch (code edited or corrupted)." };
       const obj = JSON.parse(json);
       return { ok:true, data: obj };
-    }catch(e){
+    }catch{
       return { ok:false, error:"Could not parse code." };
     }
   }
@@ -386,30 +381,33 @@
     setTimeout(()=>{ overlay.remove(); banner.remove(); }, 2200);
   }
 
-  // ===================== UI State =====================
+  // ===================== State =====================
   let currentLevel = null;
   let currentMode = "classic";
   let currentMatchCode = "";
   let teamSize = 4;
 
-  let quiz = []; // [{prompt, answers[], user, playerNo}]
+  let quiz = [];
   let t0 = 0;
   let timerId = null;
   let submitted = false;
-  let sprintAutoSubmitId = null;
 
   // attempt-local reads snapshot
   let readsUsedThisRound = 0;
   let globalSnapshotAtStart = 0;
   const attemptReadsLeft = () => Math.max(0, globalSnapshotAtStart - readsUsedThisRound);
 
-  // ===================== Menu wiring =====================
+  function clampInt(v, min, max, fallback){
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+  }
+
   function modeChanged(){
     currentMode = $("#mode").value;
     $("#teamSizeField").style.display = (currentMode === "team") ? "block" : "none";
   }
 
-  // ===================== Render levels =====================
   function levelDesc(lvl){
     const map = {
       1: "Core basics (y/o/pero/porque…).",
@@ -449,9 +447,7 @@
         <div class="level-desc">${levelDesc(lvl)}</div>
       `;
 
-      if (unlocked){
-        btn.addEventListener("click", () => startLevel(lvl));
-      }
+      if (unlocked) btn.addEventListener("click", () => startLevel(lvl));
       host.appendChild(btn);
     }
 
@@ -460,15 +456,13 @@
     updateReadsPill();
   }
 
-  // ===================== Timer =====================
   function startTimer(){
     t0 = Date.now();
     clearInterval(timerId);
     timerId = setInterval(() => {
       const t = Math.floor((Date.now() - t0) / 1000);
       $("#timer").textContent = `Time: ${t}s`;
-      if (currentMode === "sprint" && t >= SPRINT_CAP_SECONDS){
-        // Auto-submit once
+      if (currentMode === "speed" && t >= SPEED_CAP_SECONDS){
         if (!submitted) finishAndCheck(true);
       }
     }, 200);
@@ -479,15 +473,13 @@
     return Math.floor((Date.now() - t0) / 1000);
   }
 
-  // ===================== Build same 10 prompts by seed =====================
   function buildQuiz(lvl, mode, matchCode){
     const pool = CONNECTORS[lvl] || [];
     const seedStr = `${matchCode}|L${lvl}|M${mode}`;
     const seedInt = xmur3(seedStr)();
     const shuffled = seededShuffle(pool, seedInt);
-    const selected = shuffled.slice(0, Math.min(QUESTIONS_PER_ROUND, shuffled.length));
 
-    // If pool is smaller (shouldn't happen), repeat deterministically:
+    const selected = shuffled.slice(0, Math.min(QUESTIONS_PER_ROUND, shuffled.length));
     while (selected.length < QUESTIONS_PER_ROUND){
       selected.push(shuffled[selected.length % shuffled.length]);
     }
@@ -500,7 +492,6 @@
     }));
   }
 
-  // ===================== Start level =====================
   function startLevel(lvl){
     currentLevel = lvl;
     currentMode = $("#mode").value;
@@ -508,14 +499,14 @@
 
     const rawCode = ($("#matchCode").value || "").trim().toUpperCase();
     currentMatchCode = rawCode || makeMatchCode();
-    $("#matchCode").value = currentMatchCode; // show it (helps for “same prompts”)
+    $("#matchCode").value = currentMatchCode;
 
     submitted = false;
     readsUsedThisRound = 0;
     globalSnapshotAtStart = getGlobalReads();
     $("#reads-left").textContent = String(attemptReadsLeft());
 
-    $("#sprintCap").style.display = (currentMode === "sprint") ? "block" : "none";
+    $("#speedCap").style.display = (currentMode === "speed") ? "block" : "none";
 
     $("#game-title").textContent = `Level ${lvl}`;
     $("#modeLabel").textContent = MODE_LABELS[currentMode] || currentMode;
@@ -523,8 +514,8 @@
 
     const subtitleMap = {
       classic: "Translate the connector into Spanish.",
-      suddendeath: "One mistake = fail. (You can still see feedback.)",
-      sprint: "Finish within 60 seconds. Auto-submits at 60s.",
+      suddendeath: "One mistake = fail. (You still get full feedback.)",
+      speed: "Speed Challenge: 60 seconds. Auto-submits at 60s.",
       team: "Pass the device! Each question assigns Player 1…N."
     };
     $("#game-subtitle").textContent = subtitleMap[currentMode] || "Translate the connector into Spanish.";
@@ -539,19 +530,10 @@
     startTimer();
   }
 
-  function clampInt(v, min, max, fallback){
-    const n = parseInt(v, 10);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(min, Math.min(max, n));
-  }
-
-  // ===================== Render quiz =====================
   function updateSpanishButtonsState(container){
     const left = attemptReadsLeft();
     $("#reads-left").textContent = String(left);
-
-    const esBtns = Array.from(container.querySelectorAll('button[data-role="es-tts"]'));
-    esBtns.forEach(btn => {
+    container.querySelectorAll('button[data-role="es-tts"]').forEach(btn => {
       btn.disabled = left <= 0;
       btn.title = left > 0 ? `Read Spanish target (uses 1; left: ${left})` : "No Spanish reads left for this attempt";
     });
@@ -586,7 +568,6 @@
       esBtn.type = "button";
       esBtn.className = "toolbtn";
       esBtn.textContent = "🔊 ES";
-      esBtn.title = "Read Spanish target (uses 1)";
       esBtn.dataset.role = "es-tts";
       esBtn.addEventListener("click", () => {
         if (attemptReadsLeft() <= 0) { updateSpanishButtonsState(qwrap); return; }
@@ -610,7 +591,6 @@
       input.addEventListener("input", (e) => { quiz[i].user = e.target.value; });
 
       ans.appendChild(input);
-
       row.appendChild(prompt);
       row.appendChild(ans);
       qwrap.appendChild(row);
@@ -618,23 +598,20 @@
 
     updateSpanishButtonsState(qwrap);
 
-    const submit = $("#submit");
-    submit.disabled = false;
-    submit.textContent = "Finish & Check";
-    submit.onclick = () => finishAndCheck(false);
+    $("#submit").disabled = false;
+    $("#submit").textContent = "Finish & Check";
+    $("#submit").onclick = () => finishAndCheck(false);
 
     $("#back-button").onclick = backToMenu;
   }
 
-  // ===================== Finish + feedback =====================
   function finishAndCheck(isAuto=false){
     if (submitted) return;
     submitted = true;
 
     const elapsed = stopTimer();
-    const cappedElapsed = (currentMode === "sprint") ? Math.min(elapsed, SPRINT_CAP_SECONDS) : elapsed;
+    const cappedElapsed = (currentMode === "speed") ? Math.min(elapsed, SPEED_CAP_SECONDS) : elapsed;
 
-    // collect
     const inputs = $$("#questions input");
     inputs.forEach((inp, i) => { quiz[i].user = inp.value; });
 
@@ -654,7 +631,6 @@
       inputs[i].disabled = true;
     });
 
-    // Sudden death rule: any wrong => fail (no unlock + no best save)
     const died = (currentMode === "suddendeath") && (wrong > 0);
 
     const penalties = wrong * PENALTY_PER_WRONG;
@@ -664,7 +640,6 @@
     $("#submit").textContent = isAuto ? "Auto-checked" : "Checked";
 
     // Commit global reads
-    const before = getGlobalReads();
     let after = clampReads(globalSnapshotAtStart - readsUsedThisRound);
     const perfect = (correct === quiz.length);
     if (perfect && after < GLOBAL_READS_MAX) after = clampReads(after + 1);
@@ -687,14 +662,12 @@
       unlockMsg = died ? "💀 Sudden Death failed on the final level." : "🏁 Final level — brilliant work.";
     }
 
-    // Save best (except sudden death fail)
-    if (!(died)){
+    if (!died){
       saveBest(currentMode, currentLevel, finalScore);
     }
 
-    // Build Result Code payload
     const payload = {
-      v: 2,
+      v: "FINAL",
       lvl: currentLevel,
       mode: currentMode,
       match: currentMatchCode,
@@ -709,7 +682,6 @@
     };
     const resultCode = makeResultCode(payload);
 
-    // Results UI
     const results = $("#results");
     results.innerHTML = "";
 
@@ -719,7 +691,7 @@
       <div class="line" style="font-size:1.35rem; font-weight:950; color: var(--text);">
         ${died ? "💀 SUDDEN DEATH: FAILED" : "🏁 FINAL SCORE"}: ${finalScore}s
       </div>
-      <div class="line">⏱️ Time: <strong>${cappedElapsed}s</strong>${currentMode==="sprint" ? " (cap 60s)" : ""}</div>
+      <div class="line">⏱️ Time: <strong>${cappedElapsed}s</strong>${currentMode==="speed" ? " (cap 60s)" : ""}</div>
       <div class="line">➕ Penalties: <strong>${wrong} × ${PENALTY_PER_WRONG}s = ${penalties}s</strong></div>
       <div class="line">✅ Correct: <strong>${correct}/${quiz.length}</strong></div>
       <div class="line" style="margin-top:8px;"><strong>${unlockMsg}</strong></div>
@@ -730,6 +702,20 @@
       showPerfectCelebration();
       summary.classList.add("tq-shake");
     }
+
+    const codeBoxMatch = document.createElement("div");
+    codeBoxMatch.className = "codebox";
+    codeBoxMatch.innerHTML = `
+      <div class="label">Match Code (same prompts across devices)</div>
+      <div>${currentMatchCode}</div>
+    `;
+
+    const codeBox = document.createElement("div");
+    codeBox.className = "codebox";
+    codeBox.innerHTML = `
+      <div class="label">Result Code (copy/paste for comparison)</div>
+      <div>${resultCode}</div>
+    `;
 
     const ul = document.createElement("ul");
     quiz.forEach((q, idx) => {
@@ -748,20 +734,6 @@
       ul.appendChild(li);
     });
 
-    const codeBox = document.createElement("div");
-    codeBox.className = "codebox";
-    codeBox.innerHTML = `
-      <div class="label">Result Code (copy/paste for 2-device comparison)</div>
-      <div>${resultCode}</div>
-    `;
-
-    const codeBox2 = document.createElement("div");
-    codeBox2.className = "codebox";
-    codeBox2.innerHTML = `
-      <div class="label">Match Code (must match on both devices for same prompts)</div>
-      <div>${currentMatchCode}</div>
-    `;
-
     const again = document.createElement("button");
     again.className = "btn primary";
     again.style.marginTop = "14px";
@@ -769,20 +741,18 @@
     again.onclick = () => startLevel(currentLevel);
 
     results.appendChild(summary);
-    results.appendChild(codeBox2);
+    results.appendChild(codeBoxMatch);
     results.appendChild(codeBox);
     results.appendChild(ul);
     results.appendChild(again);
 
-    // Refresh levels (best/unlocks)
+    // refresh menu (best/unlocks)
     renderLevels();
-
-    // Scroll results into view
-    summary.scrollIntoView({ behavior: "smooth", block: "start" });
-
-    // Return to game view (since renderLevels flips menu on)
+    // keep game view visible
     $("#menu").style.display = "none";
     $("#game").style.display = "block";
+
+    summary.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function backToMenu(){
@@ -793,7 +763,7 @@
     renderLevels();
   }
 
-  // ===================== Compare UI =====================
+  // ===================== Compare =====================
   function compareCodes(){
     const out = $("#compareOut");
     out.innerHTML = "";
@@ -813,8 +783,6 @@
     }
 
     const A = a.data, B = b.data;
-
-    // Check fairness: same level, mode, match
     const sameLevel = A.lvl === B.lvl;
     const sameMode  = A.mode === B.mode;
     const sameMatch = (A.match || "") === (B.match || "");
@@ -830,19 +798,15 @@
       return;
     }
 
-    // Decide winner: default lower score wins
     let winner = "Tie";
-    let reason = "";
-
     if (A.mode === "suddendeath"){
-      // Sudden death: prefer NOT died, then higher correct, then lower score
       const aAlive = !A.died, bAlive = !B.died;
       if (aAlive && !bAlive) winner = "Player A";
       else if (!aAlive && bAlive) winner = "Player B";
       else if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
-    } else if (A.mode === "sprint"){
-      // Sprint: higher correct wins; tie -> lower wrong; tie -> lower score
+    } else if (A.mode === "speed"){
+      // Speed: higher correct wins; tie -> fewer wrong; tie -> lower score
       if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.wrong !== B.wrong) winner = (A.wrong < B.wrong) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
@@ -850,26 +814,20 @@
       if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
     }
 
-    const header = `
+    out.innerHTML = `
       <div class="win">
         <div style="font-weight:950; font-size:16px;">🏆 Winner: ${winner}</div>
         <div style="margin-top:6px;">Level <strong>${A.lvl}</strong> · Mode <strong>${MODE_LABELS[A.mode]||A.mode}</strong> · Match <strong>${A.match}</strong></div>
       </div>
-    `;
-
-    const table = `
       <div class="win">
         <div><strong>Player A</strong> — Score: ${A.score}s · Correct: ${A.correct}/10 · Wrong: ${A.wrong} · Time: ${A.elapsed}s ${A.died ? "· 💀 died" : ""}</div>
         <div style="margin-top:6px;"><strong>Player B</strong> — Score: ${B.score}s · Correct: ${B.correct}/10 · Wrong: ${B.wrong} · Time: ${B.elapsed}s ${B.died ? "· 💀 died" : ""}</div>
       </div>
     `;
-
-    out.innerHTML = header + table;
   }
 
   // ===================== Init =====================
   document.addEventListener("DOMContentLoaded", () => {
-    // init reads
     setGlobalReads(getGlobalReads());
     updateReadsPill();
 
