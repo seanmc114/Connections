@@ -1,116 +1,78 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Synge Connectors</title>
-  <link rel="stylesheet" href="style.css"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TURBO · LC Spanish · Connectors</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg-crest" aria-hidden="true"></div>
-  <div class="bg-glow" aria-hidden="true"></div>
+  <!-- Crest watermark background -->
+  <div class="crest" aria-hidden="true"></div>
 
-  <main class="wrap">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark">⚡</div>
-        <div class="brand-text">
-          <h1>Synge Connectors</h1>
-          <p>Conjunctions · Connections · Linking words</p>
-        </div>
+  <main class="shell">
+    <header class="header">
+      <div class="title-wrap">
+        <h1><span class="turbo">TURBO</span> · LC Spanish</h1>
+        <p class="subtitle">Conjunctions · Connectors · Linking words (EN → ES)</p>
       </div>
 
-      <div class="hud" id="hud">
-        <div class="hud-pill">
-          <span class="hud-label">Level</span>
-          <span class="hud-value" id="hudLevel">—</span>
+      <div class="meta">
+        <div class="pill">
+          <span class="pill-label">Spanish reads</span>
+          <span class="pill-value" id="reads-pill">7/7</span>
         </div>
-        <div class="hud-pill">
-          <span class="hud-label">Time</span>
-          <span class="hud-value" id="hudTime">00:00</span>
+        <div class="pill">
+          <span class="pill-label">Rule</span>
+          <span class="pill-value">+30s per wrong/blank</span>
         </div>
-        <div class="hud-pill">
-          <span class="hud-label">Penalty</span>
-          <span class="hud-value" id="hudPenalty">+0s</span>
+        <div class="pill">
+          <span class="pill-label">Round</span>
+          <span class="pill-value">10 questions</span>
         </div>
       </div>
     </header>
 
-    <!-- MENU -->
-    <section class="card" id="menu">
+    <!-- LEVELS -->
+    <section class="card" id="level-screen">
       <div class="card-head">
         <h2>Choose a level</h2>
-        <p>10 questions · +30 seconds per wrong/blank · accents required (Ñ can be typed as N)</p>
+        <p>Levels unlock when you hit the target score for the previous level. Best score saves automatically.</p>
       </div>
 
-      <div class="levels" id="levels"></div>
+      <div id="level-list" class="level-list"></div>
 
-      <div class="menu-actions">
-        <button class="btn ghost" id="howBtn" type="button">How it works</button>
-        <button class="btn primary" id="startBtn" type="button" disabled>Start Level</button>
-      </div>
-
-      <div class="how" id="howPanel" hidden>
-        <ul>
-          <li>You’ll get <strong>10 prompts</strong> (English) and type the <strong>Spanish connector</strong>.</li>
-          <li>Score = your time + <strong>30s</strong> for each wrong/blank.</li>
-          <li>At the end you’ll see full feedback and your best time for that level will save automatically.</li>
-        </ul>
+      <div class="card-foot">
+        <div class="hint">
+          Tip: Click 🔈 to hear the English prompt · Click 🔊 to hear the Spanish target (limited per attempt).
+        </div>
       </div>
     </section>
 
     <!-- GAME -->
-    <section class="card" id="game" hidden>
-      <div class="card-head">
-        <h2 id="gameTitle">Level —</h2>
-        <p id="gameSubtitle">Translate the connector into Spanish.</p>
-      </div>
-
-      <form id="quizForm" class="quiz"></form>
-
-      <div class="game-actions">
-        <button class="btn ghost" id="backToMenuBtn" type="button">Back to Menu</button>
-        <button class="btn primary" id="submitBtn" type="button">Submit</button>
-      </div>
-    </section>
-
-    <!-- RESULTS -->
-    <section class="card" id="results" hidden>
-      <div class="card-head">
-        <h2>Results</h2>
-        <p id="resultsSummary">—</p>
-      </div>
-
-      <div class="results-grid">
-        <div class="metric">
-          <div class="metric-label">Raw time</div>
-          <div class="metric-value" id="rawTime">—</div>
+    <section class="card" id="game" style="display:none;">
+      <div class="card-head game-head">
+        <div>
+          <h2 id="game-title">Level</h2>
+          <p class="muted">Type the Spanish connector/linking phrase.</p>
         </div>
-        <div class="metric">
-          <div class="metric-label">Penalties</div>
-          <div class="metric-value" id="penalties">—</div>
-        </div>
-        <div class="metric">
-          <div class="metric-label">Final score</div>
-          <div class="metric-value" id="finalScore">—</div>
-        </div>
-        <div class="metric">
-          <div class="metric-label">Best (this level)</div>
-          <div class="metric-value" id="bestScore">—</div>
+        <div class="timer-wrap">
+          <div id="timer" class="timer">Time: 0s</div>
+          <div class="reads-small">Spanish reads left (this attempt): <strong id="reads-left">7</strong></div>
         </div>
       </div>
 
-      <div class="feedback" id="feedback"></div>
+      <div id="questions" class="questions"></div>
 
-      <div class="results-actions">
-        <button class="btn ghost" id="tryAgainBtn" type="button">Try Again</button>
-        <button class="btn ghost" id="menuBtn" type="button">Back to Menu</button>
-        <button class="btn primary" id="nextLevelBtn" type="button">Next Level</button>
+      <div class="controls">
+        <button id="submit" class="btn primary">Finish & Check</button>
+        <button id="back-button" class="btn ghost">Back to Levels</button>
       </div>
+
+      <div id="results" class="results"></div>
     </section>
   </main>
 
-  <canvas id="confetti" aria-hidden="true"></canvas>
   <script src="script.js"></script>
 </body>
 </html>
