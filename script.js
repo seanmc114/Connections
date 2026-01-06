@@ -1,17 +1,15 @@
 // TURBO · Connectors (EN → ES) · CONNECTIONS_BRIGHT1
-// Full working script — fixes:
-// ✅ Mode dropdown no longer breaks level list (bestKey was missing before)
-// ✅ Team Size change now updates properly
-// ✅ Adds the mode rules banner logic
-//
-// Modes: Classic, Survival, Sprint (60s), Team Relay
-// SAME Match Code => same 10 prompts across devices.
-// Short Result Code for class call-out.
+// Full working script — includes Classic / Survival / Sprint / Team Relay
+// +30s per wrong/blank, same-10 prompts via Match Code, short Result Code, compare tool.
+
+// IMPORTANT: boot flag so index.html can detect if JS actually ran
+window.__TURBO_CONNECTORS_BOOTED = true;
 
 (() => {
   const $  = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
 
+  // ===================== CONFIG =====================
   const QUESTIONS_PER_ROUND = 10;
   const PENALTY_PER_WRONG   = 30;
   const SPRINT_CAP_SECONDS  = 60;
@@ -41,7 +39,6 @@
     team: "Team Relay"
   };
 
-  // ✅ FIX: bestKey was missing before (this caused levels to disappear on mode change)
   const bestKey = (mode, lvl) => `${STORAGE_PREFIX}:best:${canonMode(mode)}:L${lvl}`;
 
   // ===================== Mode rules banner =====================
@@ -481,7 +478,8 @@
 
   function modeChanged(){
     currentMode = canonMode($("#mode").value);
-    $("#teamSizeField").style.display = (currentMode === "team") ? "block" : "none";
+    const ts = $("#teamSizeField");
+    if (ts) ts.style.display = (currentMode === "team") ? "block" : "none";
     setModeRulesBanner(currentMode);
   }
 
@@ -588,7 +586,8 @@
     globalSnapshotAtStart = getGlobalReads();
     $("#reads-left").textContent = String(attemptReadsLeft());
 
-    $("#speedCap").style.display = (currentMode === "sprint") ? "block" : "none";
+    const cap = $("#speedCap");
+    if (cap) cap.style.display = (currentMode === "sprint") ? "block" : "none";
 
     $("#game-title").textContent = `Level ${lvl}`;
     $("#modeLabel").textContent = MODE_LABELS[currentMode] || currentMode;
@@ -762,7 +761,7 @@
     const summary = document.createElement("div");
     summary.className = "result-summary";
     summary.innerHTML = `
-      <div class="line" style="font-size:1.35rem; font-weight:950; color: var(--text);">
+      <div class="line" style="font-size:1.35rem; font-weight:950;">
         ${died ? "💀 SURVIVAL: FAILED" : "🏁 FINAL SCORE"}: ${finalScore}s
       </div>
       <div class="line">⏱️ Time: <strong>${cappedElapsed}s</strong>${currentMode==="sprint" ? " (cap 60s)" : ""}</div>
@@ -901,7 +900,20 @@
 
   // ===================== Init =====================
   document.addEventListener("DOMContentLoaded", () => {
-    console.log("TURBO Connectors loaded: CONNECTIONS_BRIGHT1");
+    // If these IDs don’t exist, the UI won’t render.
+    const required = ["#mode", "#level-list", "#menu", "#game", "#questions", "#results", "#submit", "#back-button"];
+    const missing = required.filter(sel => !$(sel));
+    if (missing.length){
+      const be = $("#bootError");
+      if (be){
+        be.style.display = "block";
+        be.querySelector(".bootBody").innerHTML =
+          `<p>Missing required elements in index.html:</p><pre>${missing.join("\n")}</pre>
+           <p>Paste the full index.html I gave you so IDs match.</p>`;
+      }
+      console.error("Missing elements:", missing);
+      return;
+    }
 
     setGlobalReads(getGlobalReads());
     updateReadsPill();
@@ -911,7 +923,6 @@
       renderLevels();
     });
 
-    // ✅ FIX: team size change actually updates
     $("#teamSize").addEventListener("change", () => {
       teamSize = clampInt($("#teamSize").value, 2, 8, 4);
     });
