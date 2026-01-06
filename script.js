@@ -1,12 +1,15 @@
 // TURBO · LC Spanish · Connectors (EN → ES)
-// Present only. Same core logic as your Turbo scoring/feedback:
-// - 10 questions per round
-// - +30 seconds per wrong/blank
-// - Unlock thresholds 200 → 40
-// - Best score saved per level
-// - Try Again
-// - Perfect round celebration
-// - TTS buttons + limited Spanish reads per attempt (cap 7), commit-on-finish (+1 token on perfect)
+// Modes: Classic, Sudden Death, Sprint (60s cap), Team Relay
+// Competitive fairness (2 devices): use the SAME Match Code → same 10 prompts.
+// Each attempt produces a Result Code. Use the Compare panel to declare winner.
+//
+// Preserves your working Turbo mechanics:
+// - 10 questions
+// - +30s per wrong/blank
+// - unlock thresholds 200→40
+// - best saved
+// - global ES reads tokens cap 7 (commit-on-finish), +1 token on perfect
+// - confetti/banner on perfect
 
 (() => {
   const $  = sel => document.querySelector(sel);
@@ -15,17 +18,27 @@
   // ===================== CONFIG =====================
   const QUESTIONS_PER_ROUND = 10;
   const PENALTY_PER_WRONG   = 30;
+  const SPRINT_CAP_SECONDS  = 60;
 
-  // Score needed (previous level) to unlock next:
-  // If Level 1 best ≤ 200 → unlock L2; L2 best ≤ 180 → unlock L3; ... ; L9 best ≤ 40 → unlock L10
   const BASE_THRESH = { 1:200, 2:180, 3:160, 4:140, 5:120, 6:100, 7:80, 8:60, 9:40 };
 
-  // Limited Spanish reads
   const GLOBAL_READS_MAX = 7;
-  const GLOBAL_READS_KEY = "turboConnectors:globalReads";
+  const GLOBAL_READS_KEY = "turboConnectors:globalReads:v2";
+
+  const STORAGE_PREFIX = "turboConnectors:v2";
+  const bestKey = (mode, lvl) => `${STORAGE_PREFIX}:best:${mode}:${lvl}`;
+
+  // "Signature" salt for Result Codes (not truly secure, but prevents casual tampering)
+  const RESULT_SALT = "TURBO_CONNECTORS_V2_SALT_2026";
+
+  const MODE_LABELS = {
+    classic: "Classic",
+    suddendeath: "Sudden Death",
+    sprint: "Sprint (60s cap)",
+    team: "Team Relay"
+  };
 
   // ===================== DATASET (Levels 1–10) =====================
-  // Each entry: { en: "meaning", answers: ["acceptable", "alternatives"] }
   const CONNECTORS = {
     1: [
       { en: "and", answers: ["y", "e"] },
@@ -50,7 +63,7 @@
       { en: "finally", answers: ["finalmente", "por último"] },
       { en: "at the same time", answers: ["al mismo tiempo"] },
       { en: "while", answers: ["mientras"] },
-      { en: "until", answers: ["hasta que", "hasta"] },
+      { en: "until", answers: ["hasta", "hasta que"] },
       { en: "since (time)", answers: ["desde"] },
       { en: "later", answers: ["más tarde"] },
       { en: "nowadays", answers: ["hoy en día"] },
@@ -58,8 +71,8 @@
       { en: "for example", answers: ["por ejemplo"] },
       { en: "also (adding)", answers: ["además"] },
       { en: "in general", answers: ["en general"] },
-      { en: "on Monday / every Monday", answers: ["los lunes", "cada lunes"] },
-      { en: "every day", answers: ["cada día"] }
+      { en: "as soon as", answers: ["en cuanto", "tan pronto como"] },
+      { en: "in the meantime", answers: ["mientras tanto"] }
     ],
     3: [
       { en: "because of", answers: ["a causa de", "por"] },
@@ -92,7 +105,7 @@
       { en: "at least", answers: ["al menos", "por lo menos"] },
       { en: "but rather (not X, but Y)", answers: ["sino"] },
       { en: "in contrast", answers: ["por el contrario", "en cambio"] },
-      { en: "still / all the same", answers: ["de todos modos"] },
+      { en: "all the same", answers: ["de todos modos"] },
       { en: "in spite of that", answers: ["a pesar de eso", "a pesar de ello"] }
     ],
     5: [
@@ -119,15 +132,15 @@
       { en: "in case", answers: ["en caso de que"] },
       { en: "otherwise", answers: ["si no"] },
       { en: "even if", answers: ["incluso si", "aunque"] },
-      { en: "as soon as", answers: ["tan pronto como", "en cuanto"] },
       { en: "in that case", answers: ["en ese caso"] },
       { en: "in any case", answers: ["en cualquier caso", "de todos modos"] },
       { en: "whether", answers: ["si", "ya sea"] },
       { en: "either…or…", answers: ["o…o…", "ya sea…o…"] },
       { en: "as a rule", answers: ["por regla general"] },
       { en: "generally speaking", answers: ["en general"] },
-      { en: "as long as (duration)", answers: ["durante el tiempo que"] },
-      { en: "if not", answers: ["si no"] }
+      { en: "to the extent that", answers: ["hasta cierto punto", "hasta el punto de que"] },
+      { en: "given that", answers: ["dado que"] },
+      { en: "as soon as", answers: ["en cuanto", "tan pronto como"] }
     ],
     7: [
       { en: "from my point of view", answers: ["desde mi punto de vista"] },
@@ -140,31 +153,30 @@
       { en: "likewise", answers: ["igualmente", "del mismo modo"] },
       { en: "on the contrary", answers: ["al contrario"] },
       { en: "as a matter of fact", answers: ["de hecho"] },
-      { en: "in the meantime", answers: ["mientras tanto"] },
       { en: "thereby / in this way", answers: ["de este modo", "así"] },
       { en: "consequently", answers: ["por consiguiente"] },
       { en: "hence", answers: ["de ahí que"] },
-      { en: "insofar as", answers: ["en la medida en que"] }
+      { en: "insofar as", answers: ["en la medida en que"] },
+      { en: "to begin with", answers: ["para empezar"] }
     ],
     8: [
       { en: "despite the fact that", answers: ["a pesar de que"] },
       { en: "even though (formal)", answers: ["si bien", "aunque"] },
-      { en: "nevertheless (formal)", answers: ["no obstante"] },
-      { en: "however (formal)", answers: ["sin embargo"] },
       { en: "all the same", answers: ["de todos modos"] },
       { en: "anyway", answers: ["de todos modos"] },
       { en: "after all", answers: ["al fin y al cabo"] },
       { en: "indeed", answers: ["en efecto"] },
       { en: "in any event", answers: ["en cualquier caso", "en todo caso"] },
       { en: "no matter what", answers: ["pase lo que pase"] },
-      { en: "no matter how", answers: ["por muy", "por muy que"] },
       { en: "in view of", answers: ["en vista de"] },
       { en: "in the light of", answers: ["a la luz de"] },
       { en: "once (as soon as)", answers: ["una vez que"] },
-      { en: "whenever", answers: ["cada vez que", "siempre que"] }
+      { en: "whenever", answers: ["cada vez que", "siempre que"] },
+      { en: "nevertheless (formal)", answers: ["no obstante"] },
+      { en: "however (formal)", answers: ["sin embargo"] },
+      { en: "be that as it may", answers: ["sea como sea"] }
     ],
     9: [
-      { en: "to begin with", answers: ["para empezar"] },
       { en: "in the first place", answers: ["en primer lugar"] },
       { en: "in the second place", answers: ["en segundo lugar"] },
       { en: "lastly", answers: ["por último", "finalmente"] },
@@ -172,38 +184,36 @@
       { en: "to the extent that", answers: ["hasta el punto de que"] },
       { en: "so much so that", answers: ["tanto que"] },
       { en: "with the aim of", answers: ["con el objetivo de", "con el fin de"] },
-      { en: "in any case (formal)", answers: ["en todo caso"] },
       { en: "either way", answers: ["de una forma u otra"] },
       { en: "as a consequence", answers: ["en consecuencia"] },
       { en: "therefore (high register)", answers: ["por ende"] },
       { en: "thus", answers: ["así", "de este modo"] },
       { en: "for that matter", answers: ["por cierto"] },
-      { en: "in other words (formal)", answers: ["dicho de otro modo"] }
+      { en: "in other words (formal)", answers: ["dicho de otro modo"] },
+      { en: "seeing that", answers: ["visto que"] },
+      { en: "considering that", answers: ["teniendo en cuenta que"] }
     ],
     10: [
-      { en: "be that as it may", answers: ["sea como sea"] },
-      { en: "nonetheless", answers: ["con todo", "aun así", "aún así"] },
       { en: "notwithstanding", answers: ["no obstante"] },
       { en: "on the grounds that", answers: ["con el argumento de que"] },
       { en: "for fear that", answers: ["por miedo a que", "por temor a que"] },
       { en: "so as not to", answers: ["para no"] },
       { en: "it follows that", answers: ["se deduce que"] },
-      { en: "insofar as (formal)", answers: ["en la medida en que"] },
       { en: "inasmuch as", answers: ["en tanto que"] },
-      { en: "given that", answers: ["dado que"] },
-      { en: "seeing that", answers: ["visto que"] },
-      { en: "considering that", answers: ["teniendo en cuenta que"] },
       { en: "in accordance with", answers: ["de acuerdo con", "conforme a"] },
       { en: "in the event that", answers: ["en el supuesto de que"] },
-      { en: "in any event (very formal)", answers: ["en cualquier caso", "en todo caso"] }
+      { en: "in any event (very formal)", answers: ["en cualquier caso", "en todo caso"] },
+      { en: "given that", answers: ["dado que"] },
+      { en: "seeing that", answers: ["visto que"] },
+      { en: "to the extent that (formal)", answers: ["en la medida en que"] },
+      { en: "nonetheless", answers: ["con todo", "aun así", "aún así"] },
+      { en: "therefore (formal)", answers: ["por consiguiente"] },
+      { en: "with regard to (formal)", answers: ["en lo que respecta a"] }
     ]
   };
 
   // ===================== Normalisation =====================
-  // Accents REQUIRED: we do NOT strip accents.
-  // Capital letters ignored.
-  // Treat ñ as n.
-  // Trim punctuation/spaces at ends and collapse internal spaces.
+  // Accents REQUIRED (we don't strip accents); capitals ignored; ñ counts as n.
   function norm(s){
     let t = (s || "").trim().toLowerCase();
     t = t.replace(/ñ/g, "n");
@@ -211,14 +221,13 @@
     t = t.replace(/^[¿¡"“”'().,;:]+|[¿¡"“”'().,;:]+$/g, "");
     return t;
   }
-
   function isCorrect(user, answers){
     const u = norm(user);
     if (!u) return false;
     return answers.some(a => norm(a) === u);
   }
 
-  // ===================== Speech =====================
+  // ===================== TTS =====================
   function speak(text, lang){
     try{
       if(!("speechSynthesis" in window)) return;
@@ -229,7 +238,7 @@
     }catch{}
   }
 
-  // ===================== Global Spanish reads =====================
+  // ===================== Global reads tokens =====================
   const clampReads = n => Math.max(0, Math.min(GLOBAL_READS_MAX, n|0));
   function getGlobalReads(){
     const v = localStorage.getItem(GLOBAL_READS_KEY);
@@ -242,43 +251,108 @@
   }
   function setGlobalReads(n){
     localStorage.setItem(GLOBAL_READS_KEY, String(clampReads(n)));
-    updateReadsPills();
+    updateReadsPill();
   }
-
-  function updateReadsPills(){
+  function updateReadsPill(){
     const now = getGlobalReads();
     const pill = $("#reads-pill");
     if (pill) pill.textContent = `${now}/${GLOBAL_READS_MAX}`;
   }
 
-  // ===================== Best/unlocks =====================
-  const STORAGE_PREFIX = "turboConnectors:v1";
-  const bestKey = lvl => `${STORAGE_PREFIX}:best:${lvl}`;
-
-  function getBest(lvl){
-    const v = localStorage.getItem(bestKey(lvl));
+  // ===================== Best / unlocks =====================
+  function getBest(mode, lvl){
+    const v = localStorage.getItem(bestKey(mode,lvl));
     const n = v == null ? null : parseInt(v,10);
     return Number.isFinite(n) ? n : null;
   }
-  function saveBest(lvl, score){
-    const prev = getBest(lvl);
-    if (prev == null || score < prev) localStorage.setItem(bestKey(lvl), String(score));
+  function saveBest(mode, lvl, score){
+    const prev = getBest(mode,lvl);
+    if (prev == null || score < prev) localStorage.setItem(bestKey(mode,lvl), String(score));
   }
-  function isUnlocked(lvl){
+  function isUnlocked(mode, lvl){
     if (lvl === 1) return true;
     const need = BASE_THRESH[lvl - 1];
-    const prev = getBest(lvl - 1);
+    const prev = getBest(mode, lvl - 1);
     return prev != null && (need == null || prev <= need);
   }
 
-  // ===================== Helpers =====================
-  function shuffle(a){
-    a = a.slice();
+  // ===================== Seeded selection (same 10 prompts) =====================
+  // xmur3 hash -> 32-bit
+  function xmur3(str){
+    let h = 1779033703 ^ str.length;
+    for (let i=0; i<str.length; i++){
+      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    return function(){
+      h = Math.imul(h ^ (h >>> 16), 2246822507);
+      h = Math.imul(h ^ (h >>> 13), 3266489909);
+      h ^= h >>> 16;
+      return h >>> 0;
+    };
+  }
+  // mulberry32 PRNG
+  function mulberry32(a){
+    return function(){
+      let t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function seededShuffle(arr, seedInt){
+    const r = mulberry32(seedInt);
+    const a = arr.slice();
     for (let i=a.length-1; i>0; i--){
-      const j = Math.floor(Math.random()*(i+1));
+      const j = Math.floor(r() * (i+1));
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
+  }
+  function makeMatchCode(){
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let out = "";
+    for (let i=0;i<6;i++) out += chars[Math.floor(Math.random()*chars.length)];
+    return out;
+  }
+
+  // ===================== Result Code encode/decode =====================
+  function base64urlEncode(str){
+    return btoa(unescape(encodeURIComponent(str)))
+      .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+  }
+  function base64urlDecode(str){
+    const pad = str.length % 4 ? "=".repeat(4 - (str.length % 4)) : "";
+    const s = (str + pad).replace(/-/g,"+").replace(/_/g,"/");
+    return decodeURIComponent(escape(atob(s)));
+  }
+  function simpleHash(str){
+    // quick checksum (not crypto)
+    let h = 2166136261;
+    for (let i=0;i<str.length;i++){
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16).padStart(8,"0");
+  }
+  function makeResultCode(payloadObj){
+    const payloadJson = JSON.stringify(payloadObj);
+    const sig = simpleHash(payloadJson + "|" + RESULT_SALT);
+    return `${base64urlEncode(payloadJson)}.${sig}`;
+  }
+  function parseResultCode(code){
+    try{
+      const parts = (code || "").trim().split(".");
+      if (parts.length !== 2) return { ok:false, error:"Invalid format." };
+      const json = base64urlDecode(parts[0]);
+      const sig = parts[1];
+      const expected = simpleHash(json + "|" + RESULT_SALT);
+      if (sig !== expected) return { ok:false, error:"Signature mismatch (code edited or corrupted)." };
+      const obj = JSON.parse(json);
+      return { ok:true, data: obj };
+    }catch(e){
+      return { ok:false, error:"Could not parse code." };
+    }
   }
 
   // ===================== Celebration =====================
@@ -314,51 +388,28 @@
 
   // ===================== UI State =====================
   let currentLevel = null;
-  let quiz = []; // [{prompt, answers[], user}]
+  let currentMode = "classic";
+  let currentMatchCode = "";
+  let teamSize = 4;
+
+  let quiz = []; // [{prompt, answers[], user, playerNo}]
   let t0 = 0;
   let timerId = null;
   let submitted = false;
+  let sprintAutoSubmitId = null;
 
-  // Attempt-local Spanish reads (commit on finish)
+  // attempt-local reads snapshot
   let readsUsedThisRound = 0;
   let globalSnapshotAtStart = 0;
   const attemptReadsLeft = () => Math.max(0, globalSnapshotAtStart - readsUsedThisRound);
 
-  // ===================== Render levels =====================
-  function renderLevels(){
-    const host = $("#level-list");
-    host.innerHTML = "";
-
-    for (let lvl=1; lvl<=10; lvl++){
-      const unlocked = isUnlocked(lvl);
-      const best = getBest(lvl);
-
-      const btn = document.createElement("button");
-      btn.className = "level-btn";
-      btn.disabled = !unlocked;
-
-      const title = unlocked ? `Level ${lvl}` : `🔒 Level ${lvl}`;
-      const desc  = levelDesc(lvl);
-      const bestTxt = best == null ? "Best: —" : `Best: ${best}s`;
-
-      btn.innerHTML = `
-        <div class="level-top">
-          <div class="level-title">${title}</div>
-          <div class="best">${bestTxt}</div>
-        </div>
-        <div class="level-desc">${desc}</div>
-      `;
-
-      if (unlocked){
-        btn.addEventListener("click", () => startLevel(lvl));
-      }
-      host.appendChild(btn);
-    }
-
-    $("#level-screen").style.display = "block";
-    $("#game").style.display = "none";
+  // ===================== Menu wiring =====================
+  function modeChanged(){
+    currentMode = $("#mode").value;
+    $("#teamSizeField").style.display = (currentMode === "team") ? "block" : "none";
   }
 
+  // ===================== Render levels =====================
   function levelDesc(lvl){
     const map = {
       1: "Core basics (y/o/pero/porque…).",
@@ -369,52 +420,132 @@
       6: "Conditions (a menos que, siempre que…).",
       7: "Opinion & register (según, desde mi punto de vista…).",
       8: "Concession & emphasis (al fin y al cabo, pase lo que pase…).",
-      9: "Advanced linking (hasta el punto de que, no solo… sino también…).",
+      9: "Advanced linking (no solo… sino también…, tanto que…).",
       10:"Very formal nuance (en el supuesto de que, se deduce que…)."
     };
     return map[lvl] || "Connectors";
   }
 
-  // ===================== Game =====================
+  function renderLevels(){
+    const host = $("#level-list");
+    host.innerHTML = "";
+
+    for (let lvl=1; lvl<=10; lvl++){
+      const unlocked = isUnlocked(currentMode, lvl);
+      const best = getBest(currentMode, lvl);
+
+      const btn = document.createElement("button");
+      btn.className = "level-btn";
+      btn.disabled = !unlocked;
+
+      const title = unlocked ? `Level ${lvl}` : `🔒 Level ${lvl}`;
+      const bestTxt = best == null ? "Best: —" : `Best: ${best}s`;
+
+      btn.innerHTML = `
+        <div class="level-top">
+          <div class="level-title">${title}</div>
+          <div class="best">${bestTxt}</div>
+        </div>
+        <div class="level-desc">${levelDesc(lvl)}</div>
+      `;
+
+      if (unlocked){
+        btn.addEventListener("click", () => startLevel(lvl));
+      }
+      host.appendChild(btn);
+    }
+
+    $("#menu").style.display = "block";
+    $("#game").style.display = "none";
+    updateReadsPill();
+  }
+
+  // ===================== Timer =====================
   function startTimer(){
     t0 = Date.now();
     clearInterval(timerId);
     timerId = setInterval(() => {
       const t = Math.floor((Date.now() - t0) / 1000);
       $("#timer").textContent = `Time: ${t}s`;
+      if (currentMode === "sprint" && t >= SPRINT_CAP_SECONDS){
+        // Auto-submit once
+        if (!submitted) finishAndCheck(true);
+      }
     }, 200);
   }
-
   function stopTimer(){
     clearInterval(timerId);
     timerId = null;
     return Math.floor((Date.now() - t0) / 1000);
   }
 
+  // ===================== Build same 10 prompts by seed =====================
+  function buildQuiz(lvl, mode, matchCode){
+    const pool = CONNECTORS[lvl] || [];
+    const seedStr = `${matchCode}|L${lvl}|M${mode}`;
+    const seedInt = xmur3(seedStr)();
+    const shuffled = seededShuffle(pool, seedInt);
+    const selected = shuffled.slice(0, Math.min(QUESTIONS_PER_ROUND, shuffled.length));
+
+    // If pool is smaller (shouldn't happen), repeat deterministically:
+    while (selected.length < QUESTIONS_PER_ROUND){
+      selected.push(shuffled[selected.length % shuffled.length]);
+    }
+
+    return selected.map((it, idx) => ({
+      prompt: it.en,
+      answers: it.answers.slice(),
+      user: "",
+      playerNo: (mode === "team") ? ((idx % teamSize) + 1) : null
+    }));
+  }
+
+  // ===================== Start level =====================
   function startLevel(lvl){
     currentLevel = lvl;
-    submitted = false;
+    currentMode = $("#mode").value;
+    teamSize = clampInt($("#teamSize").value, 2, 8, 4);
 
-    // attempt-local reads snapshot
+    const rawCode = ($("#matchCode").value || "").trim().toUpperCase();
+    currentMatchCode = rawCode || makeMatchCode();
+    $("#matchCode").value = currentMatchCode; // show it (helps for “same prompts”)
+
+    submitted = false;
     readsUsedThisRound = 0;
     globalSnapshotAtStart = getGlobalReads();
     $("#reads-left").textContent = String(attemptReadsLeft());
 
-    // build quiz
-    const pool = CONNECTORS[lvl] || [];
-    const sample = shuffle(pool).slice(0, Math.min(QUESTIONS_PER_ROUND, pool.length));
-    quiz = sample.map(it => ({ prompt: it.en, answers: it.answers.slice(), user: "" }));
+    $("#sprintCap").style.display = (currentMode === "sprint") ? "block" : "none";
 
     $("#game-title").textContent = `Level ${lvl}`;
-    $("#results").innerHTML = "";
+    $("#modeLabel").textContent = MODE_LABELS[currentMode] || currentMode;
+    $("#matchLabel").textContent = currentMatchCode;
 
-    $("#level-screen").style.display = "none";
+    const subtitleMap = {
+      classic: "Translate the connector into Spanish.",
+      suddendeath: "One mistake = fail. (You can still see feedback.)",
+      sprint: "Finish within 60 seconds. Auto-submits at 60s.",
+      team: "Pass the device! Each question assigns Player 1…N."
+    };
+    $("#game-subtitle").textContent = subtitleMap[currentMode] || "Translate the connector into Spanish.";
+
+    quiz = buildQuiz(lvl, currentMode, currentMatchCode);
+
+    $("#results").innerHTML = "";
+    $("#menu").style.display = "none";
     $("#game").style.display = "block";
 
     renderQuiz();
     startTimer();
   }
 
+  function clampInt(v, min, max, fallback){
+    const n = parseInt(v, 10);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
+  }
+
+  // ===================== Render quiz =====================
   function updateSpanishButtonsState(container){
     const left = attemptReadsLeft();
     $("#reads-left").textContent = String(left);
@@ -422,9 +553,7 @@
     const esBtns = Array.from(container.querySelectorAll('button[data-role="es-tts"]'));
     esBtns.forEach(btn => {
       btn.disabled = left <= 0;
-      btn.title = left > 0
-        ? `Read Spanish target (uses 1; left: ${left})`
-        : "No Spanish reads left for this attempt";
+      btn.title = left > 0 ? `Read Spanish target (uses 1; left: ${left})` : "No Spanish reads left for this attempt";
     });
   }
 
@@ -438,7 +567,10 @@
 
       const prompt = document.createElement("div");
       prompt.className = "prompt";
-      prompt.innerHTML = `<span>${i+1}. ${q.prompt} <small>(type the Spanish)</small></span>`;
+
+      const leftSide = document.createElement("span");
+      const teamTag = (currentMode === "team") ? ` · <small>Player ${q.playerNo}</small>` : "";
+      leftSide.innerHTML = `${i+1}. ${q.prompt}${teamTag}`;
 
       const tools = document.createElement("div");
       tools.className = "tools";
@@ -458,7 +590,6 @@
       esBtn.dataset.role = "es-tts";
       esBtn.addEventListener("click", () => {
         if (attemptReadsLeft() <= 0) { updateSpanishButtonsState(qwrap); return; }
-        // Speak the FIRST accepted answer for clarity
         speak(q.answers[0], "es-ES");
         readsUsedThisRound += 1;
         updateSpanishButtonsState(qwrap);
@@ -467,6 +598,7 @@
       tools.appendChild(enBtn);
       tools.appendChild(esBtn);
 
+      prompt.appendChild(leftSide);
       prompt.appendChild(tools);
 
       const ans = document.createElement("div");
@@ -474,7 +606,7 @@
 
       const input = document.createElement("input");
       input.type = "text";
-      input.placeholder = "Type the Spanish connector…";
+      input.placeholder = (currentMode === "team") ? `Player ${q.playerNo} types here…` : "Type the Spanish connector…";
       input.addEventListener("input", (e) => { quiz[i].user = e.target.value; });
 
       ans.appendChild(input);
@@ -489,28 +621,30 @@
     const submit = $("#submit");
     submit.disabled = false;
     submit.textContent = "Finish & Check";
-    submit.onclick = finishAndCheck;
+    submit.onclick = () => finishAndCheck(false);
 
-    const back = $("#back-button");
-    back.onclick = backToLevels;
+    $("#back-button").onclick = backToMenu;
   }
 
-  // ===================== Results / feedback =====================
-  function finishAndCheck(){
+  // ===================== Finish + feedback =====================
+  function finishAndCheck(isAuto=false){
     if (submitted) return;
     submitted = true;
 
     const elapsed = stopTimer();
+    const cappedElapsed = (currentMode === "sprint") ? Math.min(elapsed, SPRINT_CAP_SECONDS) : elapsed;
 
-    // collect inputs
+    // collect
     const inputs = $$("#questions input");
     inputs.forEach((inp, i) => { quiz[i].user = inp.value; });
 
     let correct = 0;
     let wrong = 0;
+    const perQ = [];
 
     quiz.forEach((q, i) => {
       const ok = isCorrect(q.user, q.answers);
+      perQ.push(ok);
       if (ok) correct++;
       else wrong++;
 
@@ -520,63 +654,92 @@
       inputs[i].disabled = true;
     });
 
+    // Sudden death rule: any wrong => fail (no unlock + no best save)
+    const died = (currentMode === "suddendeath") && (wrong > 0);
+
     const penalties = wrong * PENALTY_PER_WRONG;
-    const finalScore = elapsed + penalties;
+    const finalScore = cappedElapsed + penalties;
 
     $("#submit").disabled = true;
-    $("#submit").textContent = "Checked";
+    $("#submit").textContent = isAuto ? "Auto-checked" : "Checked";
 
-    // Unlock message
-    let unlockMsg = "";
-    if (currentLevel < 10){
-      const need = BASE_THRESH[currentLevel];
-      if (typeof need === "number"){
-        unlockMsg = (finalScore <= need)
-          ? `🎉 Next level unlocked! (Needed ≤ ${need}s)`
-          : `🔓 Need ${finalScore - need}s less to unlock Level ${currentLevel + 1} (Target ≤ ${need}s).`;
-      }
-    } else {
-      unlockMsg = "🏁 Final level — brilliant work.";
-    }
-
-    // Commit Spanish reads now
+    // Commit global reads
     const before = getGlobalReads();
     let after = clampReads(globalSnapshotAtStart - readsUsedThisRound);
     const perfect = (correct === quiz.length);
     if (perfect && after < GLOBAL_READS_MAX) after = clampReads(after + 1);
     setGlobalReads(after);
 
-    // Save best + rerender levels later
-    saveBest(currentLevel, finalScore);
+    // Unlock message
+    let unlockMsg = "";
+    if (currentLevel < 10){
+      const need = BASE_THRESH[currentLevel];
+      if (typeof need === "number"){
+        if (died){
+          unlockMsg = `💀 Sudden Death: failed (wrong/blank detected). No unlock.`;
+        } else {
+          unlockMsg = (finalScore <= need)
+            ? `🎉 Next level unlocked! (Needed ≤ ${need}s)`
+            : `🔓 Need ${finalScore - need}s less to unlock Level ${currentLevel + 1} (Target ≤ ${need}s).`;
+        }
+      }
+    } else {
+      unlockMsg = died ? "💀 Sudden Death failed on the final level." : "🏁 Final level — brilliant work.";
+    }
 
-    // Build results UI
+    // Save best (except sudden death fail)
+    if (!(died)){
+      saveBest(currentMode, currentLevel, finalScore);
+    }
+
+    // Build Result Code payload
+    const payload = {
+      v: 2,
+      lvl: currentLevel,
+      mode: currentMode,
+      match: currentMatchCode,
+      score: finalScore,
+      elapsed: cappedElapsed,
+      wrong,
+      correct,
+      readsUsed: readsUsedThisRound,
+      perfect,
+      died,
+      ts: Date.now()
+    };
+    const resultCode = makeResultCode(payload);
+
+    // Results UI
     const results = $("#results");
     results.innerHTML = "";
 
     const summary = document.createElement("div");
     summary.className = "result-summary";
     summary.innerHTML = `
-      <div class="line" style="font-size:1.35rem; font-weight:900; color: var(--text);">🏁 FINAL SCORE: ${finalScore}s</div>
-      <div class="line">⏱️ Time: <strong>${elapsed}s</strong></div>
+      <div class="line" style="font-size:1.35rem; font-weight:950; color: var(--text);">
+        ${died ? "💀 SUDDEN DEATH: FAILED" : "🏁 FINAL SCORE"}: ${finalScore}s
+      </div>
+      <div class="line">⏱️ Time: <strong>${cappedElapsed}s</strong>${currentMode==="sprint" ? " (cap 60s)" : ""}</div>
       <div class="line">➕ Penalties: <strong>${wrong} × ${PENALTY_PER_WRONG}s = ${penalties}s</strong></div>
       <div class="line">✅ Correct: <strong>${correct}/${quiz.length}</strong></div>
       <div class="line" style="margin-top:8px;"><strong>${unlockMsg}</strong></div>
-      <div class="line" style="margin-top:8px;">🔊 Spanish reads used this attempt: <strong>${readsUsedThisRound}</strong> · Global after commit: <strong>${after}/${GLOBAL_READS_MAX}</strong></div>
+      <div class="line" style="margin-top:8px;">🔊 Spanish reads used: <strong>${readsUsedThisRound}</strong> · Global after commit: <strong>${after}/${GLOBAL_READS_MAX}</strong></div>
     `;
 
-    if (perfect){
+    if (perfect && !died){
       showPerfectCelebration();
       summary.classList.add("tq-shake");
     }
 
     const ul = document.createElement("ul");
-    quiz.forEach(q => {
-      const ok = isCorrect(q.user, q.answers);
+    quiz.forEach((q, idx) => {
+      const ok = perQ[idx];
       const li = document.createElement("li");
       li.className = ok ? "correct" : "incorrect";
-
       const accepted = q.answers.join(" / ");
+      const teamLine = (currentMode === "team") ? `<div>👤 Player ${q.playerNo}</div>` : "";
       li.innerHTML = `
+        ${teamLine}
         <div><strong>${q.prompt}</strong></div>
         <div>✅ Answer: <strong>${accepted}</strong></div>
         ${ok ? `<div>🎯 You: <strong>${q.user}</strong></div>`
@@ -585,30 +748,152 @@
       ul.appendChild(li);
     });
 
+    const codeBox = document.createElement("div");
+    codeBox.className = "codebox";
+    codeBox.innerHTML = `
+      <div class="label">Result Code (copy/paste for 2-device comparison)</div>
+      <div>${resultCode}</div>
+    `;
+
+    const codeBox2 = document.createElement("div");
+    codeBox2.className = "codebox";
+    codeBox2.innerHTML = `
+      <div class="label">Match Code (must match on both devices for same prompts)</div>
+      <div>${currentMatchCode}</div>
+    `;
+
     const again = document.createElement("button");
-    again.className = "btn primary try-again";
-    again.textContent = "Try Again";
+    again.className = "btn primary";
+    again.style.marginTop = "14px";
+    again.textContent = "Try Again (same match code)";
     again.onclick = () => startLevel(currentLevel);
 
     results.appendChild(summary);
+    results.appendChild(codeBox2);
+    results.appendChild(codeBox);
     results.appendChild(ul);
     results.appendChild(again);
 
+    // Refresh levels (best/unlocks)
+    renderLevels();
+
     // Scroll results into view
     summary.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    // Return to game view (since renderLevels flips menu on)
+    $("#menu").style.display = "none";
+    $("#game").style.display = "block";
   }
 
-  function backToLevels(){
+  function backToMenu(){
     try{ stopTimer(); }catch{}
+    submitted = true;
+    $("#menu").style.display = "block";
+    $("#game").style.display = "none";
     renderLevels();
+  }
+
+  // ===================== Compare UI =====================
+  function compareCodes(){
+    const out = $("#compareOut");
+    out.innerHTML = "";
+
+    const a = parseResultCode($("#codeA").value);
+    const b = parseResultCode($("#codeB").value);
+
+    if (!a.ok || !b.ok){
+      out.innerHTML = `
+        <div class="warn">
+          <div><strong>Could not verify codes.</strong></div>
+          <div>${!a.ok ? "A: " + a.error : ""}</div>
+          <div>${!b.ok ? "B: " + b.error : ""}</div>
+        </div>
+      `;
+      return;
+    }
+
+    const A = a.data, B = b.data;
+
+    // Check fairness: same level, mode, match
+    const sameLevel = A.lvl === B.lvl;
+    const sameMode  = A.mode === B.mode;
+    const sameMatch = (A.match || "") === (B.match || "");
+
+    if (!(sameLevel && sameMode && sameMatch)){
+      out.innerHTML = `
+        <div class="warn">
+          <div><strong>Not comparable (must match level + mode + match code).</strong></div>
+          <div>Player A: level ${A.lvl}, mode ${MODE_LABELS[A.mode]||A.mode}, match ${A.match}</div>
+          <div>Player B: level ${B.lvl}, mode ${MODE_LABELS[B.mode]||B.mode}, match ${B.match}</div>
+        </div>
+      `;
+      return;
+    }
+
+    // Decide winner: default lower score wins
+    let winner = "Tie";
+    let reason = "";
+
+    if (A.mode === "suddendeath"){
+      // Sudden death: prefer NOT died, then higher correct, then lower score
+      const aAlive = !A.died, bAlive = !B.died;
+      if (aAlive && !bAlive) winner = "Player A";
+      else if (!aAlive && bAlive) winner = "Player B";
+      else if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
+      else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
+    } else if (A.mode === "sprint"){
+      // Sprint: higher correct wins; tie -> lower wrong; tie -> lower score
+      if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
+      else if (A.wrong !== B.wrong) winner = (A.wrong < B.wrong) ? "Player A" : "Player B";
+      else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
+    } else {
+      if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
+    }
+
+    const header = `
+      <div class="win">
+        <div style="font-weight:950; font-size:16px;">🏆 Winner: ${winner}</div>
+        <div style="margin-top:6px;">Level <strong>${A.lvl}</strong> · Mode <strong>${MODE_LABELS[A.mode]||A.mode}</strong> · Match <strong>${A.match}</strong></div>
+      </div>
+    `;
+
+    const table = `
+      <div class="win">
+        <div><strong>Player A</strong> — Score: ${A.score}s · Correct: ${A.correct}/10 · Wrong: ${A.wrong} · Time: ${A.elapsed}s ${A.died ? "· 💀 died" : ""}</div>
+        <div style="margin-top:6px;"><strong>Player B</strong> — Score: ${B.score}s · Correct: ${B.correct}/10 · Wrong: ${B.wrong} · Time: ${B.elapsed}s ${B.died ? "· 💀 died" : ""}</div>
+      </div>
+    `;
+
+    out.innerHTML = header + table;
   }
 
   // ===================== Init =====================
   document.addEventListener("DOMContentLoaded", () => {
-    // initialise global reads
+    // init reads
     setGlobalReads(getGlobalReads());
-    updateReadsPills();
+    updateReadsPill();
+
+    $("#mode").addEventListener("change", () => {
+      modeChanged();
+      renderLevels();
+    });
+
+    $("#teamSize").addEventListener("change", () => {
+      teamSize = clampInt($("#teamSize").value, 2, 8, 4);
+    });
+
+    $("#genCode").addEventListener("click", () => {
+      $("#matchCode").value = makeMatchCode();
+    });
+
+    $("#compareBtn").addEventListener("click", compareCodes);
+    $("#clearCompare").addEventListener("click", () => {
+      $("#codeA").value = "";
+      $("#codeB").value = "";
+      $("#compareOut").innerHTML = "";
+    });
+
+    modeChanged();
     renderLevels();
   });
-
 })();
