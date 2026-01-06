@@ -1,15 +1,14 @@
-// TURBO · LC Spanish · Connectors (EN → ES)
+// TURBO · LC Spanish · Connectors (EN → ES) · FINAL2
 // Modes: Classic, Sudden Death, Speed Challenge (60s), Team Relay
-// Fair play across devices: SAME Match Code => same 10 prompts.
-// Each attempt produces a Result Code; Compare declares winner.
+// SAME Match Code => same 10 prompts across devices.
+// Each attempt generates a Result Code. Compare panel declares winner.
 //
-// Turbo mechanics preserved:
-// - 10 questions
+// Rules preserved:
+// - 10 prompts
 // - +30s per wrong/blank
 // - unlock thresholds 200→40
 // - best saved per (mode, level)
 // - global ES reads tokens cap 7 (commit-on-finish), +1 token on perfect
-// - confetti/banner on perfect
 
 (() => {
   const $  = sel => document.querySelector(sel);
@@ -22,12 +21,12 @@
   const BASE_THRESH = { 1:200, 2:180, 3:160, 4:140, 5:120, 6:100, 7:80, 8:60, 9:40 };
 
   const GLOBAL_READS_MAX = 7;
-  const GLOBAL_READS_KEY = "turboConnectors:globalReads:vFINAL";
+  const GLOBAL_READS_KEY = "turboConnectors:globalReads:FINAL2";
 
-  const STORAGE_PREFIX = "turboConnectors:vFINAL";
+  const STORAGE_PREFIX = "turboConnectors:FINAL2";
   const bestKey = (mode, lvl) => `${STORAGE_PREFIX}:best:${mode}:${lvl}`;
 
-  const RESULT_SALT = "TURBO_CONNECTORS_FINAL_SALT_2026";
+  const RESULT_SALT = "TURBO_CONNECTORS_FINAL2_SALT_2026";
 
   const MODE_LABELS = {
     classic: "Classic",
@@ -392,7 +391,6 @@
   let timerId = null;
   let submitted = false;
 
-  // attempt-local reads snapshot
   let readsUsedThisRound = 0;
   let globalSnapshotAtStart = 0;
   const attemptReadsLeft = () => Math.max(0, globalSnapshotAtStart - readsUsedThisRound);
@@ -667,7 +665,7 @@
     }
 
     const payload = {
-      v: "FINAL",
+      v: "FINAL2",
       lvl: currentLevel,
       mode: currentMode,
       match: currentMatchCode,
@@ -806,7 +804,6 @@
       else if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
     } else if (A.mode === "speed"){
-      // Speed: higher correct wins; tie -> fewer wrong; tie -> lower score
       if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.wrong !== B.wrong) winner = (A.wrong < B.wrong) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
@@ -828,6 +825,8 @@
 
   // ===================== Init =====================
   document.addEventListener("DOMContentLoaded", () => {
+    console.log("TURBO Connectors loaded: FINAL2");
+
     setGlobalReads(getGlobalReads());
     updateReadsPill();
 
