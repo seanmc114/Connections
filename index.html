@@ -6,106 +6,80 @@
   <title>Connections – Synge Street CBS</title>
   <link rel="stylesheet" href="style.css" />
   <style>
-    /* Minimal style to make sure it looks good even without your old CSS */
     body {
       font-family: "Poppins", sans-serif;
-      margin: 0;
-      padding: 0;
       text-align: center;
+      margin: 0;
       background: url("https://github.com/seanmc114/Connections/blob/main/crest.png?raw=true")
-        no-repeat center center fixed;
-      background-size: contain;
-      background-color: #f5f7fa;
-      color: #222;
+                  no-repeat center center fixed;
+      background-size: 300px;
+      background-color: #f7f9fc;
     }
-    h1 {
-      margin-top: 20px;
-    }
-    #main-menu {
+    #main-menu, #game {
       margin-top: 40px;
     }
     #level-list {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 10px;
-      margin: 20px;
+      gap: 12px;
+      margin-top: 30px;
     }
     .level-btn {
       padding: 10px 20px;
-      font-size: 18px;
       border-radius: 10px;
-      border: 2px solid #444;
-      background-color: #f8f8f8;
+      border: 2px solid #333;
+      background: #f8f8f8;
+      font-size: 18px;
       cursor: pointer;
     }
     .level-btn:disabled {
-      background-color: #ccc;
+      background: #ccc;
       cursor: not-allowed;
-    }
-    #game {
-      display: none;
-      margin-top: 30px;
     }
     #questions {
       max-width: 700px;
       margin: 0 auto;
-      background: rgba(255,255,255,0.85);
+      background: rgba(255,255,255,0.8);
       border-radius: 10px;
       padding: 20px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
-    .q {
-      margin-bottom: 20px;
-    }
-    input[type="text"] {
+    input[type=text] {
       width: 80%;
       padding: 8px;
-      margin-top: 5px;
-      font-size: 16px;
+      margin: 5px;
+      border-radius: 5px;
       border: 1px solid #ccc;
-      border-radius: 6px;
+      font-size: 16px;
     }
     .feedback {
-      margin-top: 4px;
       font-weight: bold;
+      margin-top: 5px;
     }
     #submit, #back-button {
-      padding: 10px 25px;
       margin: 15px;
+      padding: 10px 25px;
       font-size: 16px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
     }
-    #submit { background-color: #0074d9; color: white; }
-    #back-button { background-color: #888; color: white; }
-    #timer {
-      font-size: 20px;
-      margin: 10px;
-      font-weight: bold;
-    }
-    #results {
-      font-size: 18px;
-      margin-top: 20px;
-    }
-    .best {
-      display: block;
-      font-size: 12px;
-      color: #444;
-    }
+    #submit { background: #0074d9; color: white; }
+    #back-button { background: #555; color: white; }
+    #timer { font-size: 18px; margin: 10px; font-weight: bold; }
+    .best { display: block; font-size: 12px; color: #555; }
   </style>
 </head>
 <body>
   <h1>Connections 🎯</h1>
-  <h3>Synge Street CBS – Learn Spanish Conjunctions</h3>
+  <h3>Learn Spanish Conjunctions</h3>
 
   <div id="main-menu">
     <h2>Select a Level</h2>
     <div id="level-list"></div>
   </div>
 
-  <div id="game">
+  <div id="game" style="display:none">
     <h2 id="level-label"></h2>
     <div id="timer"></div>
     <div id="questions"></div>
