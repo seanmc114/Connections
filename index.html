@@ -4,7 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>TURBO · LC Spanish · Connectors</title>
-  <link rel="stylesheet" href="style.css" />
+
+  <!-- Cache-bust so new modes show immediately on GitHub Pages -->
+  <link rel="stylesheet" href="style.css?v=FINAL2" />
 </head>
 <body>
   <div class="crest" aria-hidden="true"></div>
@@ -17,6 +19,10 @@
       </div>
 
       <div class="meta">
+        <div class="pill">
+          <span class="pill-label">Build</span>
+          <span class="pill-value">FINAL2</span>
+        </div>
         <div class="pill">
           <span class="pill-label">Spanish reads</span>
           <span class="pill-value" id="reads-pill">7/7</span>
@@ -50,7 +56,7 @@
             <option value="speed">Speed Challenge (60s)</option>
             <option value="team">Team Relay</option>
           </select>
-          <div class="help">All modes use the same 10 prompts when Match Code is the same.</div>
+          <div class="help">If you don’t see these 4 modes, your page is loading an old cached index.html.</div>
         </div>
 
         <div class="field">
@@ -131,6 +137,7 @@
     </section>
   </main>
 
-  <script src="script.js"></script>
+  <!-- Cache-bust -->
+  <script src="script.js?v=FINAL2"></script>
 </body>
 </html>
