@@ -1,7 +1,7 @@
-// TURBO · LC Spanish · Connectors (EN → ES) · FINAL2
-// Modes: Classic, Sudden Death, Speed Challenge (60s), Team Relay
+// TURBO · LC Spanish · Connectors (EN → ES) · FINAL3
+// Modes: Classic, Survival, Sprint (60s), Team Relay
 // SAME Match Code => same 10 prompts across devices.
-// Each attempt generates a Result Code. Compare panel declares winner.
+// Short Result Code for class call-out.
 //
 // Rules preserved:
 // - 10 prompts
@@ -16,24 +16,31 @@
 
   const QUESTIONS_PER_ROUND = 10;
   const PENALTY_PER_WRONG   = 30;
-  const SPEED_CAP_SECONDS   = 60;
+  const SPRINT_CAP_SECONDS  = 60;
 
   const BASE_THRESH = { 1:200, 2:180, 3:160, 4:140, 5:120, 6:100, 7:80, 8:60, 9:40 };
 
   const GLOBAL_READS_MAX = 7;
-  const GLOBAL_READS_KEY = "turboConnectors:globalReads:FINAL2";
+  const GLOBAL_READS_KEY = "turboConnectors:globalReads:FINAL3";
 
-  const STORAGE_PREFIX = "turboConnectors:FINAL2";
-  const bestKey = (mode, lvl) => `${STORAGE_PREFIX}:best:${mode}:${lvl}`;
+  const STORAGE_PREFIX = "turboConnectors:FINAL3";
 
-  const RESULT_SALT = "TURBO_CONNECTORS_FINAL2_SALT_2026";
+  function canonMode(m){
+    const x = (m || "").toLowerCase();
+    if (x === "survival") return "survival";
+    if (x === "sprint") return "sprint";
+    if (x === "team") return "team";
+    return "classic";
+  }
 
   const MODE_LABELS = {
     classic: "Classic",
-    suddendeath: "Sudden Death",
-    speed: "Speed Challenge (60s)",
+    survival: "Survival",
+    sprint: "Sprint (60s)",
     team: "Team Relay"
   };
+
+  const bestKey = (mode, lvl) => `${STORAGE_PREFIX}:best:${canonMode(mode)}:${lvl}`;
 
   // ===================== DATASET (Levels 1–10) =====================
   const CONNECTORS = {
@@ -267,9 +274,10 @@
     if (prev == null || score < prev) localStorage.setItem(bestKey(mode,lvl), String(score));
   }
   function isUnlocked(mode, lvl){
+    const m = canonMode(mode);
     if (lvl === 1) return true;
     const need = BASE_THRESH[lvl - 1];
-    const prev = getBest(mode, lvl - 1);
+    const prev = getBest(m, lvl - 1);
     return prev != null && (need == null || prev <= need);
   }
 
@@ -311,41 +319,94 @@
     return out;
   }
 
-  // ===================== Result Code encode/decode =====================
-  function base64urlEncode(str){
-    return btoa(unescape(encodeURIComponent(str)))
-      .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
-  }
-  function base64urlDecode(str){
-    const pad = str.length % 4 ? "=".repeat(4 - (str.length % 4)) : "";
-    const s = (str + pad).replace(/-/g,"+").replace(/_/g,"/");
-    return decodeURIComponent(escape(atob(s)));
-  }
-  function simpleHash(str){
+  // ===================== SHORT Result Code (teacher-friendly) =====================
+  // Example: 07P-4K02F-91QH
+  // LL = level, M = mode letter (C classic, V survival, P sprint, T team)
+  // FF = match fingerprint (2 base36)
+  // SSS = score base36 (3)
+  // C = correct base36 (1)
+  // W = wrong base36 (1)
+  // CC = checksum (2)
+  function b36(n){ return Math.max(0, n|0).toString(36).toUpperCase(); }
+  function b36pad(n, len){ return b36(n).padStart(len, "0"); }
+  function simpleHash32(str){
     let h = 2166136261;
     for (let i=0;i<str.length;i++){
       h ^= str.charCodeAt(i);
       h = Math.imul(h, 16777619);
     }
-    return (h >>> 0).toString(16).padStart(8,"0");
+    return (h >>> 0);
   }
-  function makeResultCode(payloadObj){
-    const payloadJson = JSON.stringify(payloadObj);
-    const sig = simpleHash(payloadJson + "|" + RESULT_SALT);
-    return `${base64urlEncode(payloadJson)}.${sig}`;
+  function modeLetter(modeCanon){
+    const m = canonMode(modeCanon);
+    if (m === "classic") return "C";
+    if (m === "survival") return "V";
+    if (m === "sprint") return "P";
+    if (m === "team") return "T";
+    return "C";
   }
-  function parseResultCode(code){
+  function modeFromLetter(ch){
+    const c = (ch || "").toUpperCase();
+    if (c === "C") return "classic";
+    if (c === "V") return "survival";
+    if (c === "P") return "sprint";
+    if (c === "T") return "team";
+    return "classic";
+  }
+  function matchFinger(matchCode){
+    const h = simpleHash32((matchCode || "") + "|MF|FINAL3");
+    const v = h % (36*36);
+    return b36pad(v, 2);
+  }
+  function makeShortResultCode({ lvl, mode, match, score, correct, wrong }){
+    const LL = String(lvl).padStart(2, "0").slice(-2);
+    const M  = modeLetter(mode);
+    const FF = matchFinger(match);
+    const SSS = b36pad(score, 3).slice(-3);
+    const C = b36pad(correct, 1).slice(-1);
+    const W = b36pad(wrong, 1).slice(-1);
+
+    const body = `${LL}${M}-${FF}${SSS}-${C}${W}`;
+    const sigNum = simpleHash32(body + "|SIG|TURBO_FINAL3") % (36*36);
+    const CC = b36pad(sigNum, 2);
+
+    return `${body}${CC}`;
+  }
+  function parseShortResultCode(code){
     try{
-      const parts = (code || "").trim().split(".");
-      if (parts.length !== 2) return { ok:false, error:"Invalid format." };
-      const json = base64urlDecode(parts[0]);
-      const sig = parts[1];
-      const expected = simpleHash(json + "|" + RESULT_SALT);
-      if (sig !== expected) return { ok:false, error:"Signature mismatch (code edited or corrupted)." };
-      const obj = JSON.parse(json);
-      return { ok:true, data: obj };
+      const s = (code || "").trim().toUpperCase();
+      if (!/^\d{2}[CVPT]-[0-9A-Z]{5}-[0-9A-Z]{4}$/.test(s)){
+        return { ok:false, error:"Invalid short code format." };
+      }
+      const body = s.slice(0, -2);
+      const CC   = s.slice(-2);
+
+      const sigNum = simpleHash32(body + "|SIG|TURBO_FINAL3") % (36*36);
+      const expected = b36pad(sigNum, 2);
+      if (CC !== expected) return { ok:false, error:"Checksum mismatch (typo likely)." };
+
+      const LL = parseInt(s.slice(0,2), 10);
+      const M  = modeFromLetter(s.slice(2,3));
+      const FF = s.slice(4,6);
+      const SSS = s.slice(6,9);
+      const C  = s.slice(10,11);
+      const W  = s.slice(11,12);
+
+      return {
+        ok:true,
+        data:{
+          v:"FINAL3-short",
+          lvl: LL,
+          mode: M,
+          mf: FF,
+          score: parseInt(SSS, 36),
+          correct: parseInt(C, 36),
+          wrong: parseInt(W, 36),
+          died: (M==="survival" && parseInt(W,36)>0)
+        }
+      };
     }catch{
-      return { ok:false, error:"Could not parse code." };
+      return { ok:false, error:"Could not parse short code." };
     }
   }
 
@@ -402,7 +463,7 @@
   }
 
   function modeChanged(){
-    currentMode = $("#mode").value;
+    currentMode = canonMode($("#mode").value);
     $("#teamSizeField").style.display = (currentMode === "team") ? "block" : "none";
   }
 
@@ -460,7 +521,7 @@
     timerId = setInterval(() => {
       const t = Math.floor((Date.now() - t0) / 1000);
       $("#timer").textContent = `Time: ${t}s`;
-      if (currentMode === "speed" && t >= SPEED_CAP_SECONDS){
+      if (currentMode === "sprint" && t >= SPRINT_CAP_SECONDS){
         if (!submitted) finishAndCheck(true);
       }
     }, 200);
@@ -473,7 +534,9 @@
 
   function buildQuiz(lvl, mode, matchCode){
     const pool = CONNECTORS[lvl] || [];
-    const seedStr = `${matchCode}|L${lvl}|M${mode}`;
+    const m = canonMode(mode);
+
+    const seedStr = `${matchCode}|L${lvl}|M${m}`;
     const seedInt = xmur3(seedStr)();
     const shuffled = seededShuffle(pool, seedInt);
 
@@ -486,13 +549,13 @@
       prompt: it.en,
       answers: it.answers.slice(),
       user: "",
-      playerNo: (mode === "team") ? ((idx % teamSize) + 1) : null
+      playerNo: (m === "team") ? ((idx % teamSize) + 1) : null
     }));
   }
 
   function startLevel(lvl){
     currentLevel = lvl;
-    currentMode = $("#mode").value;
+    currentMode = canonMode($("#mode").value);
     teamSize = clampInt($("#teamSize").value, 2, 8, 4);
 
     const rawCode = ($("#matchCode").value || "").trim().toUpperCase();
@@ -504,7 +567,7 @@
     globalSnapshotAtStart = getGlobalReads();
     $("#reads-left").textContent = String(attemptReadsLeft());
 
-    $("#speedCap").style.display = (currentMode === "speed") ? "block" : "none";
+    $("#speedCap").style.display = (currentMode === "sprint") ? "block" : "none";
 
     $("#game-title").textContent = `Level ${lvl}`;
     $("#modeLabel").textContent = MODE_LABELS[currentMode] || currentMode;
@@ -512,8 +575,8 @@
 
     const subtitleMap = {
       classic: "Translate the connector into Spanish.",
-      suddendeath: "One mistake = fail. (You still get full feedback.)",
-      speed: "Speed Challenge: 60 seconds. Auto-submits at 60s.",
+      survival: "Survival: one mistake = fail. (You still get full feedback.)",
+      sprint: "Sprint: 60 seconds. Auto-submits at 60s.",
       team: "Pass the device! Each question assigns Player 1…N."
     };
     $("#game-subtitle").textContent = subtitleMap[currentMode] || "Translate the connector into Spanish.";
@@ -608,7 +671,7 @@
     submitted = true;
 
     const elapsed = stopTimer();
-    const cappedElapsed = (currentMode === "speed") ? Math.min(elapsed, SPEED_CAP_SECONDS) : elapsed;
+    const cappedElapsed = (currentMode === "sprint") ? Math.min(elapsed, SPRINT_CAP_SECONDS) : elapsed;
 
     const inputs = $$("#questions input");
     inputs.forEach((inp, i) => { quiz[i].user = inp.value; });
@@ -629,7 +692,7 @@
       inputs[i].disabled = true;
     });
 
-    const died = (currentMode === "suddendeath") && (wrong > 0);
+    const died = (currentMode === "survival") && (wrong > 0);
 
     const penalties = wrong * PENALTY_PER_WRONG;
     const finalScore = cappedElapsed + penalties;
@@ -649,7 +712,7 @@
       const need = BASE_THRESH[currentLevel];
       if (typeof need === "number"){
         if (died){
-          unlockMsg = `💀 Sudden Death: failed (wrong/blank detected). No unlock.`;
+          unlockMsg = `💀 Survival: failed (wrong/blank detected). No unlock.`;
         } else {
           unlockMsg = (finalScore <= need)
             ? `🎉 Next level unlocked! (Needed ≤ ${need}s)`
@@ -657,28 +720,22 @@
         }
       }
     } else {
-      unlockMsg = died ? "💀 Sudden Death failed on the final level." : "🏁 Final level — brilliant work.";
+      unlockMsg = died ? "💀 Survival failed on the final level." : "🏁 Final level — brilliant work.";
     }
 
     if (!died){
       saveBest(currentMode, currentLevel, finalScore);
     }
 
-    const payload = {
-      v: "FINAL2",
+    // SHORT result code
+    const resultCode = makeShortResultCode({
       lvl: currentLevel,
       mode: currentMode,
       match: currentMatchCode,
       score: finalScore,
-      elapsed: cappedElapsed,
-      wrong,
       correct,
-      readsUsed: readsUsedThisRound,
-      perfect,
-      died,
-      ts: Date.now()
-    };
-    const resultCode = makeResultCode(payload);
+      wrong
+    });
 
     const results = $("#results");
     results.innerHTML = "";
@@ -687,9 +744,9 @@
     summary.className = "result-summary";
     summary.innerHTML = `
       <div class="line" style="font-size:1.35rem; font-weight:950; color: var(--text);">
-        ${died ? "💀 SUDDEN DEATH: FAILED" : "🏁 FINAL SCORE"}: ${finalScore}s
+        ${died ? "💀 SURVIVAL: FAILED" : "🏁 FINAL SCORE"}: ${finalScore}s
       </div>
-      <div class="line">⏱️ Time: <strong>${cappedElapsed}s</strong>${currentMode==="speed" ? " (cap 60s)" : ""}</div>
+      <div class="line">⏱️ Time: <strong>${cappedElapsed}s</strong>${currentMode==="sprint" ? " (cap 60s)" : ""}</div>
       <div class="line">➕ Penalties: <strong>${wrong} × ${PENALTY_PER_WRONG}s = ${penalties}s</strong></div>
       <div class="line">✅ Correct: <strong>${correct}/${quiz.length}</strong></div>
       <div class="line" style="margin-top:8px;"><strong>${unlockMsg}</strong></div>
@@ -711,7 +768,7 @@
     const codeBox = document.createElement("div");
     codeBox.className = "codebox";
     codeBox.innerHTML = `
-      <div class="label">Result Code (copy/paste for comparison)</div>
+      <div class="label">Short Result Code (say this out loud)</div>
       <div>${resultCode}</div>
     `;
 
@@ -744,9 +801,7 @@
     results.appendChild(ul);
     results.appendChild(again);
 
-    // refresh menu (best/unlocks)
     renderLevels();
-    // keep game view visible
     $("#menu").style.display = "none";
     $("#game").style.display = "block";
 
@@ -766,8 +821,8 @@
     const out = $("#compareOut");
     out.innerHTML = "";
 
-    const a = parseResultCode($("#codeA").value);
-    const b = parseResultCode($("#codeB").value);
+    const a = parseShortResultCode($("#codeA").value);
+    const b = parseShortResultCode($("#codeB").value);
 
     if (!a.ok || !b.ok){
       out.innerHTML = `
@@ -782,29 +837,30 @@
 
     const A = a.data, B = b.data;
     const sameLevel = A.lvl === B.lvl;
-    const sameMode  = A.mode === B.mode;
-    const sameMatch = (A.match || "") === (B.match || "");
+    const sameMode  = canonMode(A.mode) === canonMode(B.mode);
+    const sameMatch = A.mf === B.mf;
 
     if (!(sameLevel && sameMode && sameMatch)){
       out.innerHTML = `
         <div class="warn">
-          <div><strong>Not comparable (must match level + mode + match code).</strong></div>
-          <div>Player A: level ${A.lvl}, mode ${MODE_LABELS[A.mode]||A.mode}, match ${A.match}</div>
-          <div>Player B: level ${B.lvl}, mode ${MODE_LABELS[B.mode]||B.mode}, match ${B.match}</div>
+          <div><strong>Not comparable (must match level + mode + same match).</strong></div>
+          <div>Player A: level ${A.lvl}, mode ${MODE_LABELS[canonMode(A.mode)]}, match-fp ${A.mf}</div>
+          <div>Player B: level ${B.lvl}, mode ${MODE_LABELS[canonMode(B.mode)]}, match-fp ${B.mf}</div>
         </div>
       `;
       return;
     }
 
+    const m = canonMode(A.mode);
     let winner = "Tie";
-    if (A.mode === "suddendeath"){
+
+    if (m === "survival"){
       const aAlive = !A.died, bAlive = !B.died;
       if (aAlive && !bAlive) winner = "Player A";
       else if (!aAlive && bAlive) winner = "Player B";
       else if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
-    } else if (A.mode === "speed"){
-      // Speed: higher correct wins; tie -> fewer wrong; tie -> lower score
+    } else if (m === "sprint"){
       if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.wrong !== B.wrong) winner = (A.wrong < B.wrong) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
@@ -815,19 +871,18 @@
     out.innerHTML = `
       <div class="win">
         <div style="font-weight:950; font-size:16px;">🏆 Winner: ${winner}</div>
-        <div style="margin-top:6px;">Level <strong>${A.lvl}</strong> · Mode <strong>${MODE_LABELS[A.mode]||A.mode}</strong> · Match <strong>${A.match}</strong></div>
+        <div style="margin-top:6px;">Level <strong>${A.lvl}</strong> · Mode <strong>${MODE_LABELS[m]}</strong> · Match-fp <strong>${A.mf}</strong></div>
       </div>
       <div class="win">
-        <div><strong>Player A</strong> — Score: ${A.score}s · Correct: ${A.correct}/10 · Wrong: ${A.wrong} · Time: ${A.elapsed}s ${A.died ? "· 💀 died" : ""}</div>
-        <div style="margin-top:6px;"><strong>Player B</strong> — Score: ${B.score}s · Correct: ${B.correct}/10 · Wrong: ${B.wrong} · Time: ${B.elapsed}s ${B.died ? "· 💀 died" : ""}</div>
+        <div><strong>Player A</strong> — Score: ${A.score}s · Correct: ${A.correct}/10 · Wrong: ${A.wrong} ${A.died ? "· 💀 died" : ""}</div>
+        <div style="margin-top:6px;"><strong>Player B</strong> — Score: ${B.score}s · Correct: ${B.correct}/10 · Wrong: ${B.wrong} ${B.died ? "· 💀 died" : ""}</div>
       </div>
     `;
   }
 
   // ===================== Init =====================
   document.addEventListener("DOMContentLoaded", () => {
-    // Quick visible proof JS loaded
-    console.log("TURBO Connectors loaded: FINAL2");
+    console.log("TURBO Connectors loaded: FINAL3");
 
     setGlobalReads(getGlobalReads());
     updateReadsPill();
