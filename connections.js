@@ -1,4 +1,5 @@
-// Connections Game — Synge Street CBS Edition (accent/case friendly)
+// Connections Game — Synge Street CBS Edition
+// Final classroom-friendly version: 10×10 questions, green/red feedback, accent-tolerant
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -17,33 +18,34 @@ document.addEventListener("DOMContentLoaded", () => {
   const bestKey = l => `connections_best_${l}`;
   const unlockKey = l => `connections_unlocked_${l}`;
   const getBest = l => parseInt(localStorage.getItem(bestKey(l))) || null;
-  const saveBest = (l,s)=>{const b=getBest(l);if(!b||s<b)localStorage.setItem(bestKey(l),s);};
-  const isUnlocked = l => l===1 || localStorage.getItem(unlockKey(l))==="true";
-  const unlock = l => localStorage.setItem(unlockKey(l),"true");
+  const saveBest = (l, s) => {
+    const b = getBest(l);
+    if (!b || s < b) localStorage.setItem(bestKey(l), s);
+  };
+  const isUnlocked = l => l === 1 || localStorage.getItem(unlockKey(l)) === "true";
+  const unlock = l => localStorage.setItem(unlockKey(l), "true");
 
-  // --- Helper: strip accents, punctuation & lowercase ---
   const normalize = s =>
-    s
-      .toLowerCase()
-      .normalize("NFD")                       // split accents
-      .replace(/[\u0300-\u036f]/g,"")        // remove accents
-      .replace(/[¡!¿?.,;:"]/g,"")            // remove punctuation
-      .trim();
+    s.toLowerCase()
+     .normalize("NFD")
+     .replace(/[\u0300-\u036f]/g,"")
+     .replace(/[¡!¿?.,;:"]/g,"")
+     .trim();
 
   const equal = (a,b) => normalize(a) === normalize(b);
 
-  // ---------- 10 Levels of conjunction data ----------
+  // ---------- 10 levels (10 questions each) ----------
   const DATA = {
     1:[
       {en:"I like Spanish and music",es:"Me gusta el espanol y la musica"},
       {en:"I have a brother and a sister",es:"Tengo un hermano y una hermana"},
       {en:"I play football and basketball",es:"Juego al futbol y al baloncesto"},
       {en:"I eat apples and oranges",es:"Como manzanas y naranjas"},
-      {en:"I read and write every day",es:"Leo y escribo todos los dias"},
       {en:"I drink water and juice",es:"Bebo agua y zumo"},
       {en:"I sing and dance",es:"Canto y bailo"},
       {en:"I walk and talk with friends",es:"Camino y hablo con amigos"},
       {en:"I listen and learn",es:"Escucho y aprendo"},
+      {en:"I read and write every day",es:"Leo y escribo todos los dias"},
       {en:"I laugh and smile",es:"Rio y sonrio"}
     ],
     2:[
@@ -156,8 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
     ]
   };
 
-  // ---------- Core game functions ----------
-  const shuffle = arr => arr.sort(()=>Math.random()-0.5);
+  const shuffle = arr => arr.sort(() => Math.random() - 0.5);
 
   function renderLevels() {
     levelList.innerHTML = "";
@@ -178,18 +179,18 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function startLevel(lvl){
-    currentLevel=lvl;
+  function startLevel(lvl) {
+    currentLevel = lvl;
     mainMenu.style.display="none";
     game.style.display="block";
     resultsDiv.innerHTML="";
     levelLabel.textContent=`Level ${lvl}`;
-    quiz=shuffle([...DATA[lvl]]);
+    quiz = shuffle([...DATA[lvl]]);
     renderQuestions();
     startTimer();
   }
 
-  function renderQuestions(){
+  function renderQuestions() {
     questionsDiv.innerHTML="";
     quiz.forEach((q,i)=>{
       const div=document.createElement("div");
@@ -223,11 +224,13 @@ document.addEventListener("DOMContentLoaded", () => {
       fb.className="feedback";
       if(equal(q.user,q.es)){
         inp.classList.add("good");
-        fb.innerHTML=`<span class="right">✅ Correct!</span>`;
+        fb.style.color="#2ecc71"; // green
+        fb.innerHTML=`✅ Correct!`;
         correct++;
       } else {
         inp.classList.add("bad");
-        fb.innerHTML=`<span class="wrong">❌ Incorrect.</span><br><em>Correct answer:</em> ${q.es}`;
+        fb.style.color="#e74c3c"; // red
+        fb.innerHTML=`❌ Incorrect.<br><em>Correct answer:</em> ${q.es}`;
       }
       inp.parentElement.appendChild(fb);
       inp.disabled=true;
