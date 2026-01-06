@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>TURBO · LC Spanish · Connectors</title>
 
-  <!-- Cache-bust so new modes show immediately -->
-  <link rel="stylesheet" href="style.css?v=FINAL2" />
+  <!-- cache-bust -->
+  <link rel="stylesheet" href="style.css?v=FINAL3" />
 </head>
 <body>
   <div class="crest" aria-hidden="true"></div>
@@ -21,7 +21,7 @@
       <div class="meta">
         <div class="pill">
           <span class="pill-label">Build</span>
-          <span class="pill-value">FINAL2</span>
+          <span class="pill-value">FINAL3</span>
         </div>
         <div class="pill">
           <span class="pill-label">Spanish reads</span>
@@ -43,7 +43,7 @@
       <div class="card-head">
         <h2>Choose level + mode</h2>
         <p>
-          For 2 devices: enter the same <strong>Match Code</strong> on both phones → same 10 prompts → each phone generates a <strong>Result Code</strong>.
+          For 2 devices: enter the same <strong>Match Code</strong> → same 10 prompts → each device produces a <strong>short Result Code</strong>.
         </p>
       </div>
 
@@ -52,26 +52,26 @@
           <label for="mode">Mode</label>
           <select id="mode">
             <option value="classic">Classic</option>
-            <option value="suddendeath">Sudden Death</option>
-            <option value="speed">Speed Challenge (60s)</option>
+            <option value="survival">Survival</option>
+            <option value="sprint">Sprint (60s)</option>
             <option value="team">Team Relay</option>
           </select>
-          <div class="help">If you don’t see these 4 modes, your page is loading an old cached index.html.</div>
+          <div class="help">If you don’t see Survival/Sprint/Team Relay, your browser is showing an old cached index.html.</div>
         </div>
 
         <div class="field">
-          <label for="matchCode">Match Code (for same prompts)</label>
+          <label for="matchCode">Match Code (same prompts across devices)</label>
           <div class="row">
             <input id="matchCode" type="text" placeholder="e.g. 4F7K2A" maxlength="12" autocomplete="off" />
             <button class="btn ghost" id="genCode" type="button">Generate</button>
           </div>
-          <div class="help">Leave blank for random solo play. For competitions, use the same code on both devices.</div>
+          <div class="help">Leave blank for solo random. For competitions, use the same code on both devices.</div>
         </div>
 
         <div class="field" id="teamSizeField" style="display:none;">
           <label for="teamSize">Team size</label>
           <input id="teamSize" type="number" min="2" max="8" value="4" />
-          <div class="help">Questions will assign Player 1…N cycling.</div>
+          <div class="help">Questions assign Player 1…N cycling.</div>
         </div>
       </div>
 
@@ -96,7 +96,7 @@
         <div class="timer-wrap">
           <div id="timer" class="timer">Time: 0s</div>
           <div class="reads-small">Spanish reads left (this attempt): <strong id="reads-left">7</strong></div>
-          <div class="reads-small" id="speedCap" style="display:none;">Speed cap: <strong>60s</strong> (auto-submit)</div>
+          <div class="reads-small" id="speedCap" style="display:none;">Sprint cap: <strong>60s</strong> (auto-submit)</div>
         </div>
       </div>
 
@@ -114,17 +114,19 @@
     <section class="card" id="compare">
       <div class="card-head">
         <h2>Compare two Result Codes</h2>
-        <p>Paste two Result Codes. It verifies same level + mode + match code, then declares a winner.</p>
+        <p>
+          Paste two <strong>short</strong> Result Codes. It checks same level + mode + match fingerprint, then declares a winner.
+        </p>
       </div>
 
       <div class="compare-grid">
         <div class="field">
           <label for="codeA">Player A Result Code</label>
-          <textarea id="codeA" rows="3" placeholder="Paste code here…"></textarea>
+          <textarea id="codeA" rows="3" placeholder="e.g. 07P-4K02F-91QH"></textarea>
         </div>
         <div class="field">
           <label for="codeB">Player B Result Code</label>
-          <textarea id="codeB" rows="3" placeholder="Paste code here…"></textarea>
+          <textarea id="codeB" rows="3" placeholder="e.g. 07P-4K02F-91QH"></textarea>
         </div>
       </div>
 
@@ -137,7 +139,7 @@
     </section>
   </main>
 
-  <!-- Cache-bust -->
-  <script src="script.js?v=FINAL2"></script>
+  <!-- cache-bust -->
+  <script src="script.js?v=FINAL3"></script>
 </body>
 </html>
