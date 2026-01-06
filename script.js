@@ -804,6 +804,7 @@
       else if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
     } else if (A.mode === "speed"){
+      // Speed: higher correct wins; tie -> fewer wrong; tie -> lower score
       if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
       else if (A.wrong !== B.wrong) winner = (A.wrong < B.wrong) ? "Player A" : "Player B";
       else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
@@ -825,6 +826,7 @@
 
   // ===================== Init =====================
   document.addEventListener("DOMContentLoaded", () => {
+    // Quick visible proof JS loaded
     console.log("TURBO Connectors loaded: FINAL2");
 
     setGlobalReads(getGlobalReads());
