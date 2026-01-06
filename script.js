@@ -1,913 +1,372 @@
-// TURBO · LC Spanish · Connectors (EN → ES) · FINAL3
-// Modes: Classic, Survival, Sprint (60s), Team Relay
-// SAME Match Code => same 10 prompts across devices.
-// Short Result Code for class call-out.
-//
-// Rules preserved:
-// - 10 prompts
-// - +30s per wrong/blank
-// - unlock thresholds 200→40
-// - best saved per (mode, level)
-// - global ES reads tokens cap 7 (commit-on-finish), +1 token on perfect
-
-(() => {
-  const $  = sel => document.querySelector(sel);
-  const $$ = sel => Array.from(document.querySelectorAll(sel));
-
-  const QUESTIONS_PER_ROUND = 10;
-  const PENALTY_PER_WRONG   = 30;
-  const SPRINT_CAP_SECONDS  = 60;
-
-  const BASE_THRESH = { 1:200, 2:180, 3:160, 4:140, 5:120, 6:100, 7:80, 8:60, 9:40 };
-
-  const GLOBAL_READS_MAX = 7;
-  const GLOBAL_READS_KEY = "turboConnectors:globalReads:FINAL3";
-
-  const STORAGE_PREFIX = "turboConnectors:FINAL3";
-
-  function canonMode(m){
-    const x = (m || "").toLowerCase();
-    if (x === "survival") return "survival";
-    if (x === "sprint") return "sprint";
-    if (x === "team") return "team";
-    return "classic";
-  }
-
-  const MODE_LABELS = {
-    classic: "Classic",
-    survival: "Survival",
-    sprint: "Sprint (60s)",
-    team: "Team Relay"
-  };
-
-  const bestKey = (mode, lvl) => `${STORAGE_PREFIX}:best:${canonMode(mode)}:${lvl}`;
-
-  // ===================== DATASET (Levels 1–10) =====================
-  const CONNECTORS = {
-    1: [
-      { en: "and", answers: ["y", "e"] },
-      { en: "or", answers: ["o", "u"] },
-      { en: "but", answers: ["pero"] },
-      { en: "because", answers: ["porque"] },
-      { en: "also", answers: ["también"] },
-      { en: "so / therefore (simple)", answers: ["así que"] },
-      { en: "if", answers: ["si"] },
-      { en: "then", answers: ["entonces"] },
-      { en: "when", answers: ["cuando"] },
-      { en: "before", answers: ["antes"] },
-      { en: "after", answers: ["después"] },
-      { en: "always", answers: ["siempre"] },
-      { en: "never", answers: ["nunca"] },
-      { en: "sometimes", answers: ["a veces"] },
-      { en: "usually", answers: ["normalmente"] }
-    ],
-    2: [
-      { en: "first(ly)", answers: ["primero", "en primer lugar"] },
-      { en: "then / next", answers: ["luego", "después", "a continuación"] },
-      { en: "finally", answers: ["finalmente", "por último"] },
-      { en: "at the same time", answers: ["al mismo tiempo"] },
-      { en: "while", answers: ["mientras"] },
-      { en: "until", answers: ["hasta", "hasta que"] },
-      { en: "since (time)", answers: ["desde"] },
-      { en: "later", answers: ["más tarde"] },
-      { en: "nowadays", answers: ["hoy en día"] },
-      { en: "in the end", answers: ["al final"] },
-      { en: "for example", answers: ["por ejemplo"] },
-      { en: "also (adding)", answers: ["además"] },
-      { en: "in general", answers: ["en general"] },
-      { en: "as soon as", answers: ["en cuanto", "tan pronto como"] },
-      { en: "in the meantime", answers: ["mientras tanto"] }
-    ],
-    3: [
-      { en: "because of", answers: ["a causa de", "por"] },
-      { en: "thanks to", answers: ["gracias a"] },
-      { en: "therefore", answers: ["por lo tanto", "por tanto"] },
-      { en: "that's why", answers: ["por eso"] },
-      { en: "as a result", answers: ["como resultado"] },
-      { en: "so that", answers: ["para que"] },
-      { en: "in order to", answers: ["para", "con el fin de"] },
-      { en: "since (because)", answers: ["ya que", "puesto que"] },
-      { en: "due to", answers: ["debido a"] },
-      { en: "for this reason", answers: ["por esta razón"] },
-      { en: "that is to say", answers: ["es decir"] },
-      { en: "in other words", answers: ["en otras palabras"] },
-      { en: "in fact", answers: ["de hecho"] },
-      { en: "clearly", answers: ["claramente"] },
-      { en: "of course", answers: ["por supuesto"] }
-    ],
-    4: [
-      { en: "however", answers: ["sin embargo"] },
-      { en: "nevertheless", answers: ["no obstante"] },
-      { en: "on the other hand", answers: ["por otro lado"] },
-      { en: "whereas", answers: ["mientras que"] },
-      { en: "instead", answers: ["en cambio"] },
-      { en: "instead of", answers: ["en vez de", "en lugar de"] },
-      { en: "although", answers: ["aunque"] },
-      { en: "despite", answers: ["a pesar de"] },
-      { en: "even so", answers: ["aun así", "aún así"] },
-      { en: "rather", answers: ["más bien"] },
-      { en: "at least", answers: ["al menos", "por lo menos"] },
-      { en: "but rather (not X, but Y)", answers: ["sino"] },
-      { en: "in contrast", answers: ["por el contrario", "en cambio"] },
-      { en: "all the same", answers: ["de todos modos"] },
-      { en: "in spite of that", answers: ["a pesar de eso", "a pesar de ello"] }
-    ],
-    5: [
-      { en: "moreover", answers: ["además"] },
-      { en: "furthermore", answers: ["además", "asimismo"] },
-      { en: "in addition", answers: ["además"] },
-      { en: "also (formal)", answers: ["asimismo"] },
-      { en: "above all", answers: ["sobre todo"] },
-      { en: "especially", answers: ["especialmente"] },
-      { en: "for instance", answers: ["por ejemplo"] },
-      { en: "in particular", answers: ["en particular"] },
-      { en: "to sum up", answers: ["en resumen", "en conclusión"] },
-      { en: "in conclusion", answers: ["en conclusión"] },
-      { en: "on the one hand", answers: ["por un lado"] },
-      { en: "on the other hand", answers: ["por otro lado"] },
-      { en: "as for / regarding", answers: ["en cuanto a", "con respecto a"] },
-      { en: "according to", answers: ["según"] },
-      { en: "in my opinion", answers: ["en mi opinión"] }
-    ],
-    6: [
-      { en: "provided that", answers: ["siempre que"] },
-      { en: "as long as", answers: ["siempre que", "mientras"] },
-      { en: "unless", answers: ["a menos que"] },
-      { en: "in case", answers: ["en caso de que"] },
-      { en: "otherwise", answers: ["si no"] },
-      { en: "even if", answers: ["incluso si", "aunque"] },
-      { en: "in that case", answers: ["en ese caso"] },
-      { en: "in any case", answers: ["en cualquier caso", "de todos modos"] },
-      { en: "whether", answers: ["si", "ya sea"] },
-      { en: "either…or…", answers: ["o…o…", "ya sea…o…"] },
-      { en: "as a rule", answers: ["por regla general"] },
-      { en: "generally speaking", answers: ["en general"] },
-      { en: "to the extent that", answers: ["hasta cierto punto", "hasta el punto de que"] },
-      { en: "given that", answers: ["dado que"] },
-      { en: "as soon as", answers: ["en cuanto", "tan pronto como"] }
-    ],
-    7: [
-      { en: "from my point of view", answers: ["desde mi punto de vista"] },
-      { en: "as far as I’m concerned", answers: ["en cuanto a mí"] },
-      { en: "in relation to", answers: ["en relación con"] },
-      { en: "with regard to", answers: ["con respecto a", "en lo que respecta a"] },
-      { en: "as for", answers: ["en cuanto a"] },
-      { en: "to a certain extent", answers: ["hasta cierto punto"] },
-      { en: "in the same way", answers: ["de la misma manera"] },
-      { en: "likewise", answers: ["igualmente", "del mismo modo"] },
-      { en: "on the contrary", answers: ["al contrario"] },
-      { en: "as a matter of fact", answers: ["de hecho"] },
-      { en: "thereby / in this way", answers: ["de este modo", "así"] },
-      { en: "consequently", answers: ["por consiguiente"] },
-      { en: "hence", answers: ["de ahí que"] },
-      { en: "insofar as", answers: ["en la medida en que"] },
-      { en: "to begin with", answers: ["para empezar"] }
-    ],
-    8: [
-      { en: "despite the fact that", answers: ["a pesar de que"] },
-      { en: "even though (formal)", answers: ["si bien", "aunque"] },
-      { en: "all the same", answers: ["de todos modos"] },
-      { en: "anyway", answers: ["de todos modos"] },
-      { en: "after all", answers: ["al fin y al cabo"] },
-      { en: "indeed", answers: ["en efecto"] },
-      { en: "in any event", answers: ["en cualquier caso", "en todo caso"] },
-      { en: "no matter what", answers: ["pase lo que pase"] },
-      { en: "in view of", answers: ["en vista de"] },
-      { en: "in the light of", answers: ["a la luz de"] },
-      { en: "once (as soon as)", answers: ["una vez que"] },
-      { en: "whenever", answers: ["cada vez que", "siempre que"] },
-      { en: "nevertheless (formal)", answers: ["no obstante"] },
-      { en: "however (formal)", answers: ["sin embargo"] },
-      { en: "be that as it may", answers: ["sea como sea"] }
-    ],
-    9: [
-      { en: "in the first place", answers: ["en primer lugar"] },
-      { en: "in the second place", answers: ["en segundo lugar"] },
-      { en: "lastly", answers: ["por último", "finalmente"] },
-      { en: "not only… but also…", answers: ["no solo… sino también…"] },
-      { en: "to the extent that", answers: ["hasta el punto de que"] },
-      { en: "so much so that", answers: ["tanto que"] },
-      { en: "with the aim of", answers: ["con el objetivo de", "con el fin de"] },
-      { en: "either way", answers: ["de una forma u otra"] },
-      { en: "as a consequence", answers: ["en consecuencia"] },
-      { en: "therefore (high register)", answers: ["por ende"] },
-      { en: "thus", answers: ["así", "de este modo"] },
-      { en: "for that matter", answers: ["por cierto"] },
-      { en: "in other words (formal)", answers: ["dicho de otro modo"] },
-      { en: "seeing that", answers: ["visto que"] },
-      { en: "considering that", answers: ["teniendo en cuenta que"] }
-    ],
-    10: [
-      { en: "notwithstanding", answers: ["no obstante"] },
-      { en: "on the grounds that", answers: ["con el argumento de que"] },
-      { en: "for fear that", answers: ["por miedo a que", "por temor a que"] },
-      { en: "so as not to", answers: ["para no"] },
-      { en: "it follows that", answers: ["se deduce que"] },
-      { en: "inasmuch as", answers: ["en tanto que"] },
-      { en: "in accordance with", answers: ["de acuerdo con", "conforme a"] },
-      { en: "in the event that", answers: ["en el supuesto de que"] },
-      { en: "in any event (very formal)", answers: ["en cualquier caso", "en todo caso"] },
-      { en: "given that", answers: ["dado que"] },
-      { en: "seeing that", answers: ["visto que"] },
-      { en: "to the extent that (formal)", answers: ["en la medida en que"] },
-      { en: "nonetheless", answers: ["con todo", "aun así", "aún así"] },
-      { en: "therefore (formal)", answers: ["por consiguiente"] },
-      { en: "with regard to (formal)", answers: ["en lo que respecta a"] }
-    ]
-  };
-
-  // ===================== Normalisation =====================
-  // Accents REQUIRED; capitals ignored; ñ counts as n.
-  function norm(s){
-    let t = (s || "").trim().toLowerCase();
-    t = t.replace(/ñ/g, "n");
-    t = t.replace(/\s+/g, " ");
-    t = t.replace(/^[¿¡"“”'().,;:]+|[¿¡"“”'().,;:]+$/g, "");
-    return t;
-  }
-  function isCorrect(user, answers){
-    const u = norm(user);
-    if (!u) return false;
-    return answers.some(a => norm(a) === u);
-  }
-
-  // ===================== TTS =====================
-  function speak(text, lang){
-    try{
-      if(!("speechSynthesis" in window)) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = lang;
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
-    }catch{}
-  }
-
-  // ===================== Global reads tokens =====================
-  const clampReads = n => Math.max(0, Math.min(GLOBAL_READS_MAX, n|0));
-  function getGlobalReads(){
-    const v = localStorage.getItem(GLOBAL_READS_KEY);
-    if (v == null){
-      localStorage.setItem(GLOBAL_READS_KEY, String(GLOBAL_READS_MAX));
-      return GLOBAL_READS_MAX;
-    }
-    const n = parseInt(v,10);
-    return Number.isFinite(n) ? clampReads(n) : GLOBAL_READS_MAX;
-  }
-  function setGlobalReads(n){
-    localStorage.setItem(GLOBAL_READS_KEY, String(clampReads(n)));
-    updateReadsPill();
-  }
-  function updateReadsPill(){
-    const now = getGlobalReads();
-    const pill = $("#reads-pill");
-    if (pill) pill.textContent = `${now}/${GLOBAL_READS_MAX}`;
-  }
-
-  // ===================== Best / unlocks =====================
-  function getBest(mode, lvl){
-    const v = localStorage.getItem(bestKey(mode,lvl));
-    const n = v == null ? null : parseInt(v,10);
-    return Number.isFinite(n) ? n : null;
-  }
-  function saveBest(mode, lvl, score){
-    const prev = getBest(mode,lvl);
-    if (prev == null || score < prev) localStorage.setItem(bestKey(mode,lvl), String(score));
-  }
-  function isUnlocked(mode, lvl){
-    const m = canonMode(mode);
-    if (lvl === 1) return true;
-    const need = BASE_THRESH[lvl - 1];
-    const prev = getBest(m, lvl - 1);
-    return prev != null && (need == null || prev <= need);
-  }
-
-  // ===================== Seeded same-10 selection =====================
-  function xmur3(str){
-    let h = 1779033703 ^ str.length;
-    for (let i=0; i<str.length; i++){
-      h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
-      h = (h << 13) | (h >>> 19);
-    }
-    return function(){
-      h = Math.imul(h ^ (h >>> 16), 2246822507);
-      h = Math.imul(h ^ (h >>> 13), 3266489909);
-      h ^= h >>> 16;
-      return h >>> 0;
-    };
-  }
-  function mulberry32(a){
-    return function(){
-      let t = a += 0x6D2B79F5;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-  function seededShuffle(arr, seedInt){
-    const r = mulberry32(seedInt);
-    const a = arr.slice();
-    for (let i=a.length-1; i>0; i--){
-      const j = Math.floor(r() * (i+1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
-  function makeMatchCode(){
-    const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-    let out = "";
-    for (let i=0;i<6;i++) out += chars[Math.floor(Math.random()*chars.length)];
-    return out;
-  }
-
-  // ===================== SHORT Result Code (teacher-friendly) =====================
-  // Example: 07P-4K02F-91QH
-  // LL = level, M = mode letter (C classic, V survival, P sprint, T team)
-  // FF = match fingerprint (2 base36)
-  // SSS = score base36 (3)
-  // C = correct base36 (1)
-  // W = wrong base36 (1)
-  // CC = checksum (2)
-  function b36(n){ return Math.max(0, n|0).toString(36).toUpperCase(); }
-  function b36pad(n, len){ return b36(n).padStart(len, "0"); }
-  function simpleHash32(str){
-    let h = 2166136261;
-    for (let i=0;i<str.length;i++){
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return (h >>> 0);
-  }
-  function modeLetter(modeCanon){
-    const m = canonMode(modeCanon);
-    if (m === "classic") return "C";
-    if (m === "survival") return "V";
-    if (m === "sprint") return "P";
-    if (m === "team") return "T";
-    return "C";
-  }
-  function modeFromLetter(ch){
-    const c = (ch || "").toUpperCase();
-    if (c === "C") return "classic";
-    if (c === "V") return "survival";
-    if (c === "P") return "sprint";
-    if (c === "T") return "team";
-    return "classic";
-  }
-  function matchFinger(matchCode){
-    const h = simpleHash32((matchCode || "") + "|MF|FINAL3");
-    const v = h % (36*36);
-    return b36pad(v, 2);
-  }
-  function makeShortResultCode({ lvl, mode, match, score, correct, wrong }){
-    const LL = String(lvl).padStart(2, "0").slice(-2);
-    const M  = modeLetter(mode);
-    const FF = matchFinger(match);
-    const SSS = b36pad(score, 3).slice(-3);
-    const C = b36pad(correct, 1).slice(-1);
-    const W = b36pad(wrong, 1).slice(-1);
-
-    const body = `${LL}${M}-${FF}${SSS}-${C}${W}`;
-    const sigNum = simpleHash32(body + "|SIG|TURBO_FINAL3") % (36*36);
-    const CC = b36pad(sigNum, 2);
-
-    return `${body}${CC}`;
-  }
-  function parseShortResultCode(code){
-    try{
-      const s = (code || "").trim().toUpperCase();
-      if (!/^\d{2}[CVPT]-[0-9A-Z]{5}-[0-9A-Z]{4}$/.test(s)){
-        return { ok:false, error:"Invalid short code format." };
-      }
-      const body = s.slice(0, -2);
-      const CC   = s.slice(-2);
-
-      const sigNum = simpleHash32(body + "|SIG|TURBO_FINAL3") % (36*36);
-      const expected = b36pad(sigNum, 2);
-      if (CC !== expected) return { ok:false, error:"Checksum mismatch (typo likely)." };
-
-      const LL = parseInt(s.slice(0,2), 10);
-      const M  = modeFromLetter(s.slice(2,3));
-      const FF = s.slice(4,6);
-      const SSS = s.slice(6,9);
-      const C  = s.slice(10,11);
-      const W  = s.slice(11,12);
-
-      return {
-        ok:true,
-        data:{
-          v:"FINAL3-short",
-          lvl: LL,
-          mode: M,
-          mf: FF,
-          score: parseInt(SSS, 36),
-          correct: parseInt(C, 36),
-          wrong: parseInt(W, 36),
-          died: (M==="survival" && parseInt(W,36)>0)
-        }
-      };
-    }catch{
-      return { ok:false, error:"Could not parse short code." };
-    }
-  }
-
-  // ===================== Celebration =====================
-  function showPerfectCelebration(){
-    const overlay = document.createElement("div");
-    overlay.className = "tq-celebrate-overlay";
-    document.body.appendChild(overlay);
-
-    const banner = document.createElement("div");
-    banner.className = "tq-perfect-banner";
-    banner.textContent = "PERFECT!";
-    document.body.appendChild(banner);
-
-    const COLORS = ["#3b82f6","#22c55e","#a855f7","#f59e0b","#ef4444","#06b6d4","#84cc16"];
-    const W = window.innerWidth;
-
-    for (let i=0; i<120; i++){
-      const c = document.createElement("div");
-      c.className = "tq-confetti";
-      const size = 6 + Math.random()*8;
-      c.style.width  = `${size}px`;
-      c.style.height = `${size*1.4}px`;
-      c.style.left   = `${Math.random()*W}px`;
-      c.style.top    = `${-20 - Math.random()*120}px`;
-      c.style.background = COLORS[i % COLORS.length];
-      c.style.animationDelay = `${Math.random()*200}ms`;
-      c.style.transform = `rotate(${Math.random()*360}deg)`;
-      overlay.appendChild(c);
-    }
-
-    setTimeout(()=>{ overlay.remove(); banner.remove(); }, 2200);
-  }
-
-  // ===================== State =====================
-  let currentLevel = null;
-  let currentMode = "classic";
-  let currentMatchCode = "";
-  let teamSize = 4;
-
-  let quiz = [];
-  let t0 = 0;
-  let timerId = null;
-  let submitted = false;
-
-  let readsUsedThisRound = 0;
-  let globalSnapshotAtStart = 0;
-  const attemptReadsLeft = () => Math.max(0, globalSnapshotAtStart - readsUsedThisRound);
-
-  function clampInt(v, min, max, fallback){
-    const n = parseInt(v, 10);
-    if (!Number.isFinite(n)) return fallback;
-    return Math.max(min, Math.min(max, n));
-  }
-
-  function modeChanged(){
-    currentMode = canonMode($("#mode").value);
-    $("#teamSizeField").style.display = (currentMode === "team") ? "block" : "none";
-  }
-
-  function levelDesc(lvl){
-    const map = {
-      1: "Core basics (y/o/pero/porque…).",
-      2: "Time & sequencing (primero, luego…).",
-      3: "Cause & result (por eso, por lo tanto…).",
-      4: "Contrast (sin embargo, a pesar de…).",
-      5: "Adding & structuring (además, en conclusión…).",
-      6: "Conditions (a menos que, siempre que…).",
-      7: "Opinion & register (según, desde mi punto de vista…).",
-      8: "Concession & emphasis (al fin y al cabo, pase lo que pase…).",
-      9: "Advanced linking (no solo… sino también…, tanto que…).",
-      10:"Very formal nuance (en el supuesto de que, se deduce que…)."
-    };
-    return map[lvl] || "Connectors";
-  }
-
-  function renderLevels(){
-    const host = $("#level-list");
-    host.innerHTML = "";
-
-    for (let lvl=1; lvl<=10; lvl++){
-      const unlocked = isUnlocked(currentMode, lvl);
-      const best = getBest(currentMode, lvl);
-
-      const btn = document.createElement("button");
-      btn.className = "level-btn";
-      btn.disabled = !unlocked;
-
-      const title = unlocked ? `Level ${lvl}` : `🔒 Level ${lvl}`;
-      const bestTxt = best == null ? "Best: —" : `Best: ${best}s`;
-
-      btn.innerHTML = `
-        <div class="level-top">
-          <div class="level-title">${title}</div>
-          <div class="best">${bestTxt}</div>
-        </div>
-        <div class="level-desc">${levelDesc(lvl)}</div>
-      `;
-
-      if (unlocked) btn.addEventListener("click", () => startLevel(lvl));
-      host.appendChild(btn);
-    }
-
-    $("#menu").style.display = "block";
-    $("#game").style.display = "none";
-    updateReadsPill();
-  }
-
-  function startTimer(){
-    t0 = Date.now();
-    clearInterval(timerId);
-    timerId = setInterval(() => {
-      const t = Math.floor((Date.now() - t0) / 1000);
-      $("#timer").textContent = `Time: ${t}s`;
-      if (currentMode === "sprint" && t >= SPRINT_CAP_SECONDS){
-        if (!submitted) finishAndCheck(true);
-      }
-    }, 200);
-  }
-  function stopTimer(){
-    clearInterval(timerId);
-    timerId = null;
-    return Math.floor((Date.now() - t0) / 1000);
-  }
-
-  function buildQuiz(lvl, mode, matchCode){
-    const pool = CONNECTORS[lvl] || [];
-    const m = canonMode(mode);
-
-    const seedStr = `${matchCode}|L${lvl}|M${m}`;
-    const seedInt = xmur3(seedStr)();
-    const shuffled = seededShuffle(pool, seedInt);
-
-    const selected = shuffled.slice(0, Math.min(QUESTIONS_PER_ROUND, shuffled.length));
-    while (selected.length < QUESTIONS_PER_ROUND){
-      selected.push(shuffled[selected.length % shuffled.length]);
-    }
-
-    return selected.map((it, idx) => ({
-      prompt: it.en,
-      answers: it.answers.slice(),
-      user: "",
-      playerNo: (m === "team") ? ((idx % teamSize) + 1) : null
-    }));
-  }
-
-  function startLevel(lvl){
-    currentLevel = lvl;
-    currentMode = canonMode($("#mode").value);
-    teamSize = clampInt($("#teamSize").value, 2, 8, 4);
-
-    const rawCode = ($("#matchCode").value || "").trim().toUpperCase();
-    currentMatchCode = rawCode || makeMatchCode();
-    $("#matchCode").value = currentMatchCode;
-
-    submitted = false;
-    readsUsedThisRound = 0;
-    globalSnapshotAtStart = getGlobalReads();
-    $("#reads-left").textContent = String(attemptReadsLeft());
-
-    $("#speedCap").style.display = (currentMode === "sprint") ? "block" : "none";
-
-    $("#game-title").textContent = `Level ${lvl}`;
-    $("#modeLabel").textContent = MODE_LABELS[currentMode] || currentMode;
-    $("#matchLabel").textContent = currentMatchCode;
-
-    const subtitleMap = {
-      classic: "Translate the connector into Spanish.",
-      survival: "Survival: one mistake = fail. (You still get full feedback.)",
-      sprint: "Sprint: 60 seconds. Auto-submits at 60s.",
-      team: "Pass the device! Each question assigns Player 1…N."
-    };
-    $("#game-subtitle").textContent = subtitleMap[currentMode] || "Translate the connector into Spanish.";
-
-    quiz = buildQuiz(lvl, currentMode, currentMatchCode);
-
-    $("#results").innerHTML = "";
-    $("#menu").style.display = "none";
-    $("#game").style.display = "block";
-
-    renderQuiz();
-    startTimer();
-  }
-
-  function updateSpanishButtonsState(container){
-    const left = attemptReadsLeft();
-    $("#reads-left").textContent = String(left);
-    container.querySelectorAll('button[data-role="es-tts"]').forEach(btn => {
-      btn.disabled = left <= 0;
-      btn.title = left > 0 ? `Read Spanish target (uses 1; left: ${left})` : "No Spanish reads left for this attempt";
-    });
-  }
-
-  function renderQuiz(){
-    const qwrap = $("#questions");
-    qwrap.innerHTML = "";
-
-    quiz.forEach((q, i) => {
-      const row = document.createElement("div");
-      row.className = "q";
-
-      const prompt = document.createElement("div");
-      prompt.className = "prompt";
-
-      const leftSide = document.createElement("span");
-      const teamTag = (currentMode === "team") ? ` · <small>Player ${q.playerNo}</small>` : "";
-      leftSide.innerHTML = `${i+1}. ${q.prompt}${teamTag}`;
-
-      const tools = document.createElement("div");
-      tools.className = "tools";
-
-      const enBtn = document.createElement("button");
-      enBtn.type = "button";
-      enBtn.className = "toolbtn";
-      enBtn.textContent = "🔈 EN";
-      enBtn.title = "Read English prompt";
-      enBtn.addEventListener("click", () => speak(q.prompt, "en-GB"));
-
-      const esBtn = document.createElement("button");
-      esBtn.type = "button";
-      esBtn.className = "toolbtn";
-      esBtn.textContent = "🔊 ES";
-      esBtn.dataset.role = "es-tts";
-      esBtn.addEventListener("click", () => {
-        if (attemptReadsLeft() <= 0) { updateSpanishButtonsState(qwrap); return; }
-        speak(q.answers[0], "es-ES");
-        readsUsedThisRound += 1;
-        updateSpanishButtonsState(qwrap);
-      });
-
-      tools.appendChild(enBtn);
-      tools.appendChild(esBtn);
-
-      prompt.appendChild(leftSide);
-      prompt.appendChild(tools);
-
-      const ans = document.createElement("div");
-      ans.className = "answer";
-
-      const input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = (currentMode === "team") ? `Player ${q.playerNo} types here…` : "Type the Spanish connector…";
-      input.addEventListener("input", (e) => { quiz[i].user = e.target.value; });
-
-      ans.appendChild(input);
-      row.appendChild(prompt);
-      row.appendChild(ans);
-      qwrap.appendChild(row);
-    });
-
-    updateSpanishButtonsState(qwrap);
-
-    $("#submit").disabled = false;
-    $("#submit").textContent = "Finish & Check";
-    $("#submit").onclick = () => finishAndCheck(false);
-
-    $("#back-button").onclick = backToMenu;
-  }
-
-  function finishAndCheck(isAuto=false){
-    if (submitted) return;
-    submitted = true;
-
-    const elapsed = stopTimer();
-    const cappedElapsed = (currentMode === "sprint") ? Math.min(elapsed, SPRINT_CAP_SECONDS) : elapsed;
-
-    const inputs = $$("#questions input");
-    inputs.forEach((inp, i) => { quiz[i].user = inp.value; });
-
-    let correct = 0;
-    let wrong = 0;
-    const perQ = [];
-
-    quiz.forEach((q, i) => {
-      const ok = isCorrect(q.user, q.answers);
-      perQ.push(ok);
-      if (ok) correct++;
-      else wrong++;
-
-      inputs[i].classList.remove("good","bad");
-      inputs[i].classList.add(ok ? "good" : "bad");
-      inputs[i].readOnly = true;
-      inputs[i].disabled = true;
-    });
-
-    const died = (currentMode === "survival") && (wrong > 0);
-
-    const penalties = wrong * PENALTY_PER_WRONG;
-    const finalScore = cappedElapsed + penalties;
-
-    $("#submit").disabled = true;
-    $("#submit").textContent = isAuto ? "Auto-checked" : "Checked";
-
-    // Commit global reads
-    let after = clampReads(globalSnapshotAtStart - readsUsedThisRound);
-    const perfect = (correct === quiz.length);
-    if (perfect && after < GLOBAL_READS_MAX) after = clampReads(after + 1);
-    setGlobalReads(after);
-
-    // Unlock message
-    let unlockMsg = "";
-    if (currentLevel < 10){
-      const need = BASE_THRESH[currentLevel];
-      if (typeof need === "number"){
-        if (died){
-          unlockMsg = `💀 Survival: failed (wrong/blank detected). No unlock.`;
-        } else {
-          unlockMsg = (finalScore <= need)
-            ? `🎉 Next level unlocked! (Needed ≤ ${need}s)`
-            : `🔓 Need ${finalScore - need}s less to unlock Level ${currentLevel + 1} (Target ≤ ${need}s).`;
-        }
-      }
-    } else {
-      unlockMsg = died ? "💀 Survival failed on the final level." : "🏁 Final level — brilliant work.";
-    }
-
-    if (!died){
-      saveBest(currentMode, currentLevel, finalScore);
-    }
-
-    // SHORT result code
-    const resultCode = makeShortResultCode({
-      lvl: currentLevel,
-      mode: currentMode,
-      match: currentMatchCode,
-      score: finalScore,
-      correct,
-      wrong
-    });
-
-    const results = $("#results");
-    results.innerHTML = "";
-
-    const summary = document.createElement("div");
-    summary.className = "result-summary";
-    summary.innerHTML = `
-      <div class="line" style="font-size:1.35rem; font-weight:950; color: var(--text);">
-        ${died ? "💀 SURVIVAL: FAILED" : "🏁 FINAL SCORE"}: ${finalScore}s
-      </div>
-      <div class="line">⏱️ Time: <strong>${cappedElapsed}s</strong>${currentMode==="sprint" ? " (cap 60s)" : ""}</div>
-      <div class="line">➕ Penalties: <strong>${wrong} × ${PENALTY_PER_WRONG}s = ${penalties}s</strong></div>
-      <div class="line">✅ Correct: <strong>${correct}/${quiz.length}</strong></div>
-      <div class="line" style="margin-top:8px;"><strong>${unlockMsg}</strong></div>
-      <div class="line" style="margin-top:8px;">🔊 Spanish reads used: <strong>${readsUsedThisRound}</strong> · Global after commit: <strong>${after}/${GLOBAL_READS_MAX}</strong></div>
-    `;
-
-    if (perfect && !died){
-      showPerfectCelebration();
-      summary.classList.add("tq-shake");
-    }
-
-    const codeBoxMatch = document.createElement("div");
-    codeBoxMatch.className = "codebox";
-    codeBoxMatch.innerHTML = `
-      <div class="label">Match Code (same prompts across devices)</div>
-      <div>${currentMatchCode}</div>
-    `;
-
-    const codeBox = document.createElement("div");
-    codeBox.className = "codebox";
-    codeBox.innerHTML = `
-      <div class="label">Short Result Code (say this out loud)</div>
-      <div>${resultCode}</div>
-    `;
-
-    const ul = document.createElement("ul");
-    quiz.forEach((q, idx) => {
-      const ok = perQ[idx];
-      const li = document.createElement("li");
-      li.className = ok ? "correct" : "incorrect";
-      const accepted = q.answers.join(" / ");
-      const teamLine = (currentMode === "team") ? `<div>👤 Player ${q.playerNo}</div>` : "";
-      li.innerHTML = `
-        ${teamLine}
-        <div><strong>${q.prompt}</strong></div>
-        <div>✅ Answer: <strong>${accepted}</strong></div>
-        ${ok ? `<div>🎯 You: <strong>${q.user}</strong></div>`
-             : `<div>❌ You: <strong>${q.user || "(blank)"}</strong></div>`}
-      `;
-      ul.appendChild(li);
-    });
-
-    const again = document.createElement("button");
-    again.className = "btn primary";
-    again.style.marginTop = "14px";
-    again.textContent = "Try Again (same match code)";
-    again.onclick = () => startLevel(currentLevel);
-
-    results.appendChild(summary);
-    results.appendChild(codeBoxMatch);
-    results.appendChild(codeBox);
-    results.appendChild(ul);
-    results.appendChild(again);
-
-    renderLevels();
-    $("#menu").style.display = "none";
-    $("#game").style.display = "block";
-
-    summary.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function backToMenu(){
-    try{ stopTimer(); }catch{}
-    submitted = true;
-    $("#menu").style.display = "block";
-    $("#game").style.display = "none";
-    renderLevels();
-  }
-
-  // ===================== Compare =====================
-  function compareCodes(){
-    const out = $("#compareOut");
-    out.innerHTML = "";
-
-    const a = parseShortResultCode($("#codeA").value);
-    const b = parseShortResultCode($("#codeB").value);
-
-    if (!a.ok || !b.ok){
-      out.innerHTML = `
-        <div class="warn">
-          <div><strong>Could not verify codes.</strong></div>
-          <div>${!a.ok ? "A: " + a.error : ""}</div>
-          <div>${!b.ok ? "B: " + b.error : ""}</div>
-        </div>
-      `;
-      return;
-    }
-
-    const A = a.data, B = b.data;
-    const sameLevel = A.lvl === B.lvl;
-    const sameMode  = canonMode(A.mode) === canonMode(B.mode);
-    const sameMatch = A.mf === B.mf;
-
-    if (!(sameLevel && sameMode && sameMatch)){
-      out.innerHTML = `
-        <div class="warn">
-          <div><strong>Not comparable (must match level + mode + same match).</strong></div>
-          <div>Player A: level ${A.lvl}, mode ${MODE_LABELS[canonMode(A.mode)]}, match-fp ${A.mf}</div>
-          <div>Player B: level ${B.lvl}, mode ${MODE_LABELS[canonMode(B.mode)]}, match-fp ${B.mf}</div>
-        </div>
-      `;
-      return;
-    }
-
-    const m = canonMode(A.mode);
-    let winner = "Tie";
-
-    if (m === "survival"){
-      const aAlive = !A.died, bAlive = !B.died;
-      if (aAlive && !bAlive) winner = "Player A";
-      else if (!aAlive && bAlive) winner = "Player B";
-      else if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
-      else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
-    } else if (m === "sprint"){
-      if (A.correct !== B.correct) winner = (A.correct > B.correct) ? "Player A" : "Player B";
-      else if (A.wrong !== B.wrong) winner = (A.wrong < B.wrong) ? "Player A" : "Player B";
-      else if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
-    } else {
-      if (A.score !== B.score) winner = (A.score < B.score) ? "Player A" : "Player B";
-    }
-
-    out.innerHTML = `
-      <div class="win">
-        <div style="font-weight:950; font-size:16px;">🏆 Winner: ${winner}</div>
-        <div style="margin-top:6px;">Level <strong>${A.lvl}</strong> · Mode <strong>${MODE_LABELS[m]}</strong> · Match-fp <strong>${A.mf}</strong></div>
-      </div>
-      <div class="win">
-        <div><strong>Player A</strong> — Score: ${A.score}s · Correct: ${A.correct}/10 · Wrong: ${A.wrong} ${A.died ? "· 💀 died" : ""}</div>
-        <div style="margin-top:6px;"><strong>Player B</strong> — Score: ${B.score}s · Correct: ${B.correct}/10 · Wrong: ${B.wrong} ${B.died ? "· 💀 died" : ""}</div>
-      </div>
-    `;
-  }
-
-  // ===================== Init =====================
-  document.addEventListener("DOMContentLoaded", () => {
-    console.log("TURBO Connectors loaded: FINAL3");
-
-    setGlobalReads(getGlobalReads());
-    updateReadsPill();
-
-    $("#mode").addEventListener("change", () => {
-      modeChanged();
-      renderLevels();
-    });
-
-    $("#teamSize").addEventListener("change", () => {
-      teamSize = clampInt($("#teamSize").value, 2, 8, 4);
-    });
-
-    $("#genCode").addEventListener("click", () => {
-      $("#matchCode").value = makeMatchCode();
-    });
-
-    $("#compareBtn").addEventListener("click", compareCodes);
-    $("#clearCompare").addEventListener("click", () => {
-      $("#codeA").value = "";
-      $("#codeB").value = "";
-      $("#compareOut").innerHTML = "";
-    });
-
-    modeChanged();
-    renderLevels();
-  });
-})();
+:root{
+  --text: #0b1020;
+  --muted: rgba(11,16,32,.70);
+  --stroke: rgba(11,16,32,.10);
+  --shadow: 0 16px 45px rgba(11,16,32,.14);
+  --radius: 22px;
+
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+
+  --cardTop: rgba(255,255,255,.86);
+  --cardBot: rgba(255,255,255,.74);
+
+  --primaryA: #2563eb; /* blue */
+  --primaryB: #22c55e; /* green */
+  --accent:  #a855f7;  /* purple */
+  --sun:     #f59e0b;  /* amber */
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+
+body{
+  margin:0;
+  font-family: var(--sans);
+  color: var(--text);
+
+  /* brighter, youthful background */
+  background:
+    radial-gradient(900px 520px at 15% 12%, rgba(37,99,235,.22), transparent 60%),
+    radial-gradient(860px 520px at 85% 18%, rgba(34,197,94,.20), transparent 62%),
+    radial-gradient(820px 520px at 60% 92%, rgba(168,85,247,.18), transparent 60%),
+    linear-gradient(135deg, #f7fbff, #f3fff8 45%, #fff7fb);
+  overflow-x:hidden;
+}
+
+.crest{
+  position:fixed; inset:0;
+  background-image: url("crest.png");
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size: min(82vmin, 760px);
+  opacity: .10;
+  mix-blend-mode: multiply;
+  filter: contrast(1.08) saturate(1.1);
+  pointer-events:none;
+  z-index:0;
+}
+
+.shell{
+  position:relative;
+  z-index:1;
+  max-width: 1040px;
+  margin: 26px auto 44px;
+  padding: 0 16px;
+}
+
+.header{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom: 14px;
+  flex-wrap:wrap;
+}
+
+h1{ margin:0; font-size: 30px; letter-spacing: .2px; }
+.turbo{
+  display:inline-block;
+  font-weight: 950;
+  letter-spacing: .8px;
+  transform: skewX(-10deg);
+  background: linear-gradient(90deg, var(--primaryA), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.subtitle{ margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+
+.meta{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+.pill{
+  display:flex; align-items:center; gap:10px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border:1px solid var(--stroke);
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(10px);
+}
+.pill-label{ color: rgba(11,16,32,.62); font-size: 12px; }
+.pill-value{ font-family: var(--mono); font-size: 12px; }
+
+.card{
+  background: linear-gradient(180deg, var(--cardTop), var(--cardBot));
+  border:1px solid var(--stroke);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  overflow:hidden;
+  margin-bottom: 14px;
+}
+
+.card-head{ padding: 18px 18px 12px; border-bottom: 1px solid rgba(11,16,32,.08); }
+.card-head h2{ margin:0 0 6px; font-size: 18px; }
+.card-head p{ margin:0; color: var(--muted); font-size: 13px; line-height:1.35; }
+
+.card-foot{ padding: 12px 18px 16px; border-top: 1px solid rgba(11,16,32,.08); }
+.hint{ color: var(--muted); font-size: 13px; }
+
+.menu-grid{
+  padding: 14px 18px 0;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 780px){ .menu-grid{ grid-template-columns: 1fr; } }
+
+.field label{
+  display:block;
+  font-size: 12px;
+  color: rgba(11,16,32,.66);
+  margin-bottom: 6px;
+}
+.field input, .field select, .field textarea{
+  width:100%;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(11,16,32,.14);
+  background: rgba(255,255,255,.86);
+  color: var(--text);
+  outline:none;
+  font-size: 14px;
+}
+.field textarea{ resize: vertical; min-height: 70px; }
+.field input:focus, .field select:focus, .field textarea:focus{
+  border-color: rgba(37,99,235,.35);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+.help{ margin-top: 6px; color: rgba(11,16,32,.62); font-size: 12px; line-height: 1.25; }
+.row{ display:flex; gap: 10px; align-items:center; }
+
+.levels{
+  display:grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 18px 14px;
+}
+@media (max-width: 900px){ .levels{ grid-template-columns: repeat(3, minmax(0,1fr)); } }
+@media (max-width: 560px){ .levels{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+.level-btn{
+  width:100%;
+  text-align:left;
+  border-radius: 16px;
+  border: 1px solid rgba(11,16,32,.12);
+  background: rgba(255,255,255,.78);
+  color: var(--text);
+  padding: 12px 12px;
+  cursor:pointer;
+  transition: transform .12s ease, box-shadow .12s ease;
+  min-height: 80px;
+}
+.level-btn:hover:enabled{
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(11,16,32,.12);
+}
+.level-btn:disabled{ opacity:.55; cursor:not-allowed; }
+.level-top{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+.level-title{ font-weight: 950; font-size: 13px; letter-spacing:.2px; }
+.best{ font-family: var(--mono); font-size: 12px; color: rgba(11,16,32,.62); }
+.level-desc{ margin-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.25; }
+
+.game-head{ display:flex; justify-content:space-between; gap: 14px; align-items:flex-start; flex-wrap:wrap; }
+.timer{
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(11,16,32,.12);
+  background: rgba(255,255,255,.85);
+}
+.smallline{ margin-top: 8px; color: var(--muted); font-size: 12px; }
+.reads-small{ margin-top: 8px; color: var(--muted); font-size: 12px; }
+
+/* NEW: mode rules banner */
+.mode-rules{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(11,16,32,.12);
+  background:
+    linear-gradient(90deg, rgba(37,99,235,.12), rgba(34,197,94,.10), rgba(168,85,247,.10));
+  color: rgba(11,16,32,.85);
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.questions{ padding: 12px 18px 0; display:grid; gap: 10px; }
+.q{
+  border-radius: 16px;
+  border: 1px solid rgba(11,16,32,.10);
+  background: rgba(255,255,255,.78);
+  padding: 12px;
+}
+.prompt{
+  font-weight: 950;
+  letter-spacing: .15px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  flex-wrap:wrap;
+}
+.tools{ display:flex; gap: 8px; align-items:center; flex-wrap:wrap; }
+.toolbtn{
+  border-radius: 999px;
+  border: 1px solid rgba(11,16,32,.14);
+  background: rgba(255,255,255,.88);
+  color: var(--text);
+  padding: 6px 10px;
+  cursor:pointer;
+  font-size: 12px;
+}
+.toolbtn:disabled{ opacity:.5; cursor:not-allowed; }
+
+.answer{ margin-top: 10px; }
+.answer input{
+  width:100%;
+  padding: 11px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(11,16,32,.14);
+  background: rgba(255,255,255,.90);
+  color: var(--text);
+  outline:none;
+  font-size: 14px;
+}
+.answer input:focus{
+  border-color: rgba(37,99,235,.35);
+  box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+}
+.answer input.good{ background-color: rgba(34, 197, 94, 0.14); border-color: rgba(34, 197, 94, 0.45); }
+.answer input.bad{ background-color: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.45); }
+
+.controls{
+  padding: 14px 18px 16px;
+  display:flex;
+  gap: 10px;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+}
+.btn{
+  border-radius: 999px;
+  border: 1px solid rgba(11,16,32,.14);
+  padding: 10px 14px;
+  font-weight: 950;
+  cursor:pointer;
+  background: rgba(255,255,255,.88);
+  color: var(--text);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.btn:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 12px 25px rgba(11,16,32,.12);
+}
+.btn.primary{
+  border: none;
+  color: #fff;
+  background: linear-gradient(90deg, var(--primaryA), var(--accent));
+}
+.btn.ghost{ background: rgba(255,255,255,.78); }
+
+.results{ padding: 0 18px 18px; }
+.result-summary{ text-align:center; margin: 12px 0 12px 0; }
+.result-summary .line{ margin: 5px 0; color: var(--muted); }
+.result-summary .line strong{ color: var(--text); }
+
+.results ul{
+  list-style:none;
+  padding:0;
+  margin: 0 auto;
+  width:100%;
+  max-width: 860px;
+  display:grid;
+  gap: 8px;
+}
+.results li{
+  border-radius: 16px;
+  border: 1px solid rgba(11,16,32,.10);
+  background: rgba(255,255,255,.78);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.results li.correct{ border-color: rgba(34, 197, 94, 0.35); }
+.results li.incorrect{ border-color: rgba(239, 68, 68, 0.35); }
+
+.codebox{
+  margin: 10px auto 0;
+  max-width: 860px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(11,16,32,.12);
+  background: rgba(255,255,255,.80);
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap:anywhere;
+}
+.codebox .label{
+  font-family: var(--sans);
+  font-weight: 950;
+  font-size: 12px;
+  color: rgba(11,16,32,.70);
+  margin-bottom: 6px;
+}
+
+.compare-grid{
+  padding: 14px 18px 0;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 780px){ .compare-grid{ grid-template-columns: 1fr; } }
+
+.compare-out{
+  padding: 0 18px 18px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.compare-out .win{
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(11,16,32,.12);
+  background: rgba(255,255,255,.78);
+  color: var(--text);
+}
+.compare-out .warn{
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(245,158,11,.35);
+  background: rgba(245,158,11,.15);
+  color: rgba(11,16,32,.92);
+}
+
+/* footer */
+.footer{
+  margin-top: 10px;
+  padding: 6px 4px 0;
+  text-align:center;
+  font-size: 12px;
+  color: rgba(11,16,32,.65);
+}
+
+/* PERFECT celebration (unchanged) */
+@keyframes tq-burst { 0%{transform:translateY(0) rotate(0)} 100%{transform:translateY(100vh) rotate(720deg); opacity:0} }
+@keyframes tq-pop { 0%{transform:scale(0.6); opacity:0} 25%{transform:scale(1.05); opacity:1} 60%{transform:scale(1)} 100%{opacity:0} }
+@keyframes tq-shake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
+.tq-celebrate-overlay{ position:fixed; inset:0; z-index:9999; pointer-events:none; }
+.tq-confetti{ position:absolute; width:8px; height:14px; border-radius:2px; opacity:0.95; will-change:transform,opacity; animation:tq-burst 1600ms ease-out forwards; }
+.tq-perfect-banner{
+  position:fixed; left:50%; top:14%;
+  transform:translateX(-50%);
+  padding:10px 18px; border-radius:999px;
+  font-weight: 950; font-size: 28px; letter-spacing: 1px;
+  color:#fff;
+  background: linear-gradient(90deg, var(--primaryA), var(--primaryB));
+  box-shadow:0 10px 30px rgba(11,16,32,.20);
+  animation:tq-pop 1800ms ease-out forwards;
+  text-shadow:0 1px 2px rgba(0,0,0,.25);
+}
+.tq-shake{ animation:tq-shake 650ms ease-in-out; }
